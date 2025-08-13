@@ -1,0 +1,1677 @@
+---
+title: "Boletim epidemiológico SRAG - SE"
+author: "NVEPI Leste"  
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: true
+    toc_depth: 2
+    df_print: paged
+  html_document:
+    toc: true
+    toc_depth: 2
+    df_print: paged
+    encoding: UTF-8
+---
+
+```{r setup-encoding, include=FALSE}
+options(encoding = "UTF-8")
+Sys.setlocale("LC_ALL", "Portuguese_Brazil.1252")  # Para Windows
+
+dir.create("BOLETIM_SRAG_files/figure-docx", recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r instalar pacotes, include=FALSE}
+# Lista de pacotes CRAN
+cran_packages <- c(
+  "tidyverse", "lubridate", "plotly", "forecast", "EpiEstim", "DT", "officer",
+  "rvg", "scales", "readxl", "purrr", "mem", "zoo", "stringi", "stringr","readxl","flextable","rmarkdown","slider","yaml","patchwork", "here"
+)
+
+# Instala apenas os pacotes que ainda não estão instalados (usa utils:: para evitar masking)
+to_install_cran <- cran_packages[!(cran_packages %in% utils::installed.packages()[, "Package"])]
+if (base::length(to_install_cran) > 0) {
+  utils::install.packages(to_install_cran)
+}
+
+```
+
+
+```{r carregar pacotes, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(lubridate)
+library(plotly)
+library(forecast)
+library(EpiEstim)
+library(DT)
+library(officer)
+library(rvg)
+library(scales)
+library(readxl)
+library(purrr)
+library(patchwork)
+library(zoo)
+library(stringi)
+library(stringr)
+library(readxl)
+library(rmarkdown)
+library(flextable)
+library(slider)
+library(yaml)
+library(glue)
+library(here)
+
+# Ancorar o root do projeto a partir deste arquivo Rmd para caminhos portáteis
+# Como o arquivo está em SRAG/, precisamos subir um nível para acessar Bancos/
+here::i_am("SRAG/BOLETIM_SRAG.Rmd")
+
+# Alternativa: definir diretório de trabalho explicitamente
+# setwd(dirname(here::here()))
+base::cat("Diretório de trabalho atual:", base::getwd(), "\n")
+base::cat("Diretório do arquivo Rmd:", here::here(), "\n")
+
+# Verifica se estamos no diretório correto
+if (!base::dir.exists("Bancos")) {
+  base::cat("Diretório 'Bancos' não encontrado no diretório atual. Tentando mudar para o diretório correto...\n")
+  if (base::dir.exists("SRAG/Bancos")) {
+    base::setwd("SRAG")
+    base::cat("Mudou para o diretório SRAG\n")
+  }
+}
+```
+
+```{r padronização}
+# 🔠 Função para padronizar nomes (minúsculo, sem acento, sem espaços)
+padronizar_nomes <- function(x) {
+  stringr::str_trim(stringi::stri_trans_general(stringr::str_to_lower(x), "Latin-ASCII"))
+}
+
+
+```
+
+
+```{r Carregar bancos, include=FALSE}
+# Carregar o arquivo CSV srag_min
+base::cat("Carregando arquivo CSV srag_min...\n")
+
+# Caminho para o arquivo CSV
+srag_min_path <- "Bancos/srag_min.csv"
+
+# Verifica se o arquivo existe
+if (!base::file.exists(srag_min_path)) {
+  base::stop("Arquivo 'srag_min.csv' não encontrado em ", srag_min_path, ". Certifique-se de que o arquivo foi criado anteriormente.")
+}
+
+# Carrega o arquivo CSV
+srag <- readr::read_csv(srag_min_path, show_col_types = FALSE)
+
+# Cria a coluna ano a partir da coluna DT_SIN_PRI
+base::cat("Criando coluna ano a partir de DT_SIN_PRI...\n")
+
+# Verifica se a coluna DT_SIN_PRI existe
+if (!"DT_SIN_PRI" %in% base::names(srag)) {
+  base::stop("Coluna 'DT_SIN_PRI' não encontrada no dataframe. Verifique se o arquivo CSV contém esta coluna.")
+}
+
+# Verifica se a coluna DT_SIN_PRI é do tipo data
+if (!lubridate::is.Date(srag$DT_SIN_PRI) && !lubridate::is.POSIXct(srag$DT_SIN_PRI)) {
+  base::cat("Convertendo coluna DT_SIN_PRI para formato de data...\n")
+  srag <- dplyr::mutate(srag, DT_SIN_PRI = lubridate::as_date(DT_SIN_PRI))
+}
+
+srag <- dplyr::mutate(srag, ano = lubridate::year(DT_SIN_PRI))
+
+# Converte a coluna SE para inteiro se necessário
+if ("SE" %in% base::names(srag)) {
+  srag <- dplyr::mutate(srag, SE = base::as.integer(SE))
+}
+
+# Verifica se a coluna res_RS existe e filtra apenas a região Leste
+if ("res_RS" %in% base::names(srag)) {
+  base::cat("Filtrando apenas casos da região Leste...\n")
+  srag <- dplyr::filter(srag, res_RS == "Leste")
+  base::cat("Casos após filtro da região Leste:", base::nrow(srag), "\n")
+} else {
+  base::cat("Aviso: Coluna 'res_RS' não encontrada. Todos os casos serão incluídos.\n")
+}
+
+# Cria a coluna ID_MN_RESI_pad padronizada se ID_MN_RESI existir
+if ("ID_MN_RESI" %in% base::names(srag)) {
+  base::cat("Criando coluna ID_MN_RESI_pad padronizada...\n")
+  srag <- dplyr::mutate(srag, ID_MN_RESI_pad = base::tolower(stringr::str_trim(ID_MN_RESI)))
+} else {
+  base::cat("Aviso: Coluna 'ID_MN_RESI' não encontrada.\n")
+}
+
+base::cat("Dataframe srag carregado com", base::nrow(srag), "linhas e", base::ncol(srag), "colunas\n")
+base::cat("Colunas disponíveis:", base::paste(base::names(srag), collapse = ", "), "\n")
+base::cat("Coluna ano criada com valores:", base::paste(base::unique(srag$ano), collapse = ", "), "\n")
+
+# Carregar parâmetros externos com fallback para caminho relativo
+params_candidates <- c(
+  "params.yaml",  # Caminho relativo ao diretório atual
+  here::here("params.yaml"),
+  here::here("SRAG", "params.yaml"),
+  "params.yaml"
+)
+params_path <- params_candidates[base::file.exists(params_candidates)][1]
+base::cat("Arquivo de parâmetros selecionado:", params_path, "\n")
+if (is.na(params_path)) base::stop("Arquivo 'params.yaml' não encontrado no projeto.")
+
+# Verifica se o pacote yaml está funcionando
+base::cat("Verificando pacote yaml...\n")
+if (!base::require(yaml, quietly = TRUE)) {
+  base::stop("Pacote yaml não está disponível")
+}
+
+base::cat("Carregando arquivo de parâmetros...\n")
+params_externos <- yaml::read_yaml(params_path)
+
+filtro_ano <- params_externos$filtro_ano
+ano_epidemico <- params_externos$ano_epidemico
+ano_ref <- params_externos$ano_ref
+
+# Verifica se as variáveis foram carregadas corretamente
+base::cat("Parâmetros carregados:\n")
+base::cat("- filtro_ano:", base::paste(filtro_ano, collapse = ", "), "\n")
+base::cat("- ano_epidemico:", ano_epidemico, "\n")
+base::cat("- ano_ref:", ano_ref, "\n")
+
+# Verifica se filtro_ano é um vetor numérico
+if (!base::is.numeric(filtro_ano) || base::length(filtro_ano) == 0) {
+  base::stop("Variável 'filtro_ano' não foi carregada corretamente do arquivo params.yaml")
+}
+
+# População: caminho relativo ao projeto (arquivo existe em SRAG/tabelas_auxiliares/POP.xlsx)
+pop_path <- "tabelas_auxiliares/POP.xlsx"
+base::cat("Verificando arquivo de população:", pop_path, "\n")
+base::cat("Arquivo existe:", base::file.exists(pop_path), "\n")
+if (!base::file.exists(pop_path)) base::stop("Arquivo de população não encontrado em ", pop_path)
+
+base::cat("Carregando arquivo de população...\n")
+pop <- readxl::read_excel(pop_path)
+
+# Aplica as transformações
+pop <- dplyr::rename(pop,
+  ano = Ano,
+  regiao = REG_ADM,
+  populacao = POP
+)
+
+pop <- dplyr::mutate(pop, ID_MN_RESI_pad = padronizar_nomes(regiao))
+pop <- dplyr::select(pop, ano, ID_MN_RESI_pad, populacao)
+pop <- dplyr::mutate(pop, ano = base::as.double(ano))
+
+```
+
+```{r mapeamento viral}
+# Mapeamento dos nomes dos vírus
+virus_map <- c(
+  PCR_FLUASU = "Influenza A",
+  PCR_FLUBLI = "Influenza B",
+  PCR_SARS2  = "SARS-CoV-2",
+  PCR_VSR    = "Vírus Sincicial Respiratório",
+  PCR_PARA1  = "Parainfluenza 1",
+  PCR_PARA2  = "Parainfluenza 2",
+  PCR_PARA3  = "Parainfluenza 3",
+  PCR_PARA4  = "Parainfluenza 4",
+  PCR_ADENO  = "Adenovírus",
+  PCR_METAP  = "Metapneumovírus",
+  PCR_BOCA   = "Bocavírus",
+  PCR_RINO   = "Rinovírus",
+  PCR_OUTRO  = "Outro vírus respiratório"
+)
+
+
+# Ordenar idades
+niveis_idade  <- c("Menor de 2","2 a 10","11 a 19","20 a 29","30 a 39",
+                     "40 a 49","50 a 59","60 a 69","70 a 79","80 e mais")
+
+```
+
+```{r selecao-colunas-e-dataframe-reduzido, include=FALSE}
+# Colunas utilizadas no boletim (fixas)
+colunas_fixas_usadas <- c(
+  "ID_MN_RESI", "DT_SIN_PRI", "SE", "res_RS", "NM_UN_INTE", "FE1",
+  "TP_IDADE", "NU_IDADE_N", "SUPORT_VEN2", "Tempo_Evolucao", "EVOL1", "OBITOSRAG"
+)
+
+# Verifica se o dataframe srag foi carregado e tem as colunas necessárias
+if (base::exists("srag")) {
+  base::cat("Dataframe srag carregado com", base::nrow(srag), "linhas\n")
+  
+  # Verifica se tem as colunas necessárias
+  colunas_ausentes <- base::setdiff(colunas_fixas_usadas, base::names(srag))
+  if (base::length(colunas_ausentes) > 0) {
+    base::cat("Colunas ausentes no srag:", base::paste(colunas_ausentes, collapse = ", "), "\n")
+  } else {
+    base::cat("Todas as colunas fixas estão presentes no srag\n")
+  }
+  
+  # Identifica colunas PCR disponíveis
+  colunas_pcr_disponiveis <- base::grep("^PCR_", base::names(srag), value = TRUE)
+  base::cat("Colunas PCR disponíveis:", base::paste(colunas_pcr_disponiveis, collapse = ", "), "\n")
+  
+} else {
+  base::stop("Dataframe srag não encontrado. Execute primeiro o chunk 'Carregar bancos'.")
+}
+```
+
+```{r casos por ano ,fig.width=9, fig.height=6, fig.cap = paste0("Figura 1 – Número de casos por Semana Epidemiológica e por ano, Região Leste -",base::min(filtro_ano), " a ", base::max(filtro_ano), ")"),results='asis',echo = FALSE}
+      
+# Verifica se a coluna ano existe
+if (!"ano" %in% base::names(srag)) {
+  base::stop("Coluna 'ano' não encontrada no dataframe srag. Execute primeiro o chunk 'Carregar bancos'.")
+}
+
+df_1 <- srag %>%
+  dplyr::filter(ano >= base::min(filtro_ano), ano <= base::max(filtro_ano)) %>%
+  dplyr::group_by(ano, SE) %>%
+  dplyr::summarise(casos = dplyr::n(), .groups = "drop") %>%
+  tidyr::complete(ano, SE = 1:53, fill = list(casos = 0)) %>%
+  dplyr::arrange(ano, SE) %>%
+  dplyr::mutate(
+    semana_id = dplyr::row_number(),  # eixo X contínuo sequencial
+    ano_fator = base::factor(ano)
+  ) |>
+  dplyr::filter(casos > 0)
+
+ggplot(df_1, aes(x = semana_id, y = casos)) +
+  geom_col(fill = "#1f77b4", width = 0.8) +
+  geom_vline(
+    data = df_1 %>% group_by(ano) %>% summarise(pos = base::max(semana_id)),
+    aes(xintercept = pos),
+    color = "gray50", linetype = "dotted"
+  ) +
+  scale_x_continuous(
+    breaks = df_1 %>% group_by(ano) %>% summarise(pos = base::mean(semana_id)) %>% dplyr::pull(pos),
+    labels = levels(df_1$ano_fator),
+    expand = c(0, 0)
+  ) +
+  labs(
+    x = "Ano",
+    y = "Número de Casos"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.x = element_text(face = "bold", color = "black"),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", color = "black")
+  )
+
+srag_filtrado <- srag %>% filter(ano == ano_ref)
+
+```
+
+```{r gerar texto gráfico 1, message=FALSE, warning=FALSE, echo = FALSE, results='asis'}
+gerar_texto_ondas_srag <- function(df, anos) {
+  # Verifica se tem exatamente dois anos para comparar
+  if (base::length(anos) != 2) {
+    base::stop("A função requer exatamente dois anos para comparação.")
+  }
+  
+  df_picos <- df %>%
+    filter(ano %in% anos) %>%
+    group_by(ano) %>%
+    summarise(
+      pico = base::max(casos, na.rm = TRUE),
+      semana_pico = SE[base::which.max(casos)],
+      .groups = "drop"
+    ) %>%
+    arrange(ano)
+  
+  ano_1 <- df_picos$ano[1]
+  ano_2 <- df_picos$ano[2]
+  
+  texto <- glue::glue(
+    "A distribuição semanal dos casos de SRAG na Região Leste entre os anos de {ano_1} e {ano_2} evidencia um padrão sazonal recorrente, ",
+    "com diferenças no momento e intensidade das ondas epidêmicas. ",
+    "Em {ano_1}, o pico de notificações ocorreu na semana epidemiológica {df_picos$semana_pico[1]}, com {df_picos$pico[1]} casos. ",
+    "Já em {ano_2}, o pico foi registrado na semana {df_picos$semana_pico[2]}, totalizando {df_picos$pico[2]} casos. ",
+    "Essas variações reforçam a importância do monitoramento contínuo para identificação antecipada de períodos críticos, ",
+    "especialmente nos meses com maior circulação viral."
+  )
+  
+  return(texto)
+}
+
+texto_ondas <- gerar_texto_ondas_srag(df_1, anos = filtro_ano)
+texto_ondas
+
+```
+
+## Incidência SRAG Ano atual
+
+```{r incidencia atual,fig.width=9, fig.height=6, fig.cap = paste0("Figura 2 – Número de casos e incidência de SRAG por 100 mil habitantes por Semana Epidemiológica, Região Leste -", ano_ref, "(n = ", base::nrow(srag_filtrado), ")")}
+
+# Calcular incidência por semana epidemiológica
+srag_inc <- srag %>%
+  left_join(pop, by = c("ano", "ID_MN_RESI_pad")) %>%
+  filter(!is.na(populacao), ano == ano_ref) %>%
+  group_by(SE, ID_MN_RESI_pad) %>%
+  summarise(
+    casos = n(),
+    pop = first(populacao),  # População daquele município no ano
+    .groups = "drop"
+  ) %>%
+  group_by(SE) %>%
+  summarise(
+    casos = base::sum(casos),
+    pop = base::sum(pop),
+    .groups = "drop"
+  ) %>%
+  mutate(inc = 100000 * casos / pop)
+
+# Ordenar o eixo X corretamente (opcional)
+srag_inc$SE <- factor(srag_inc$SE, levels = base::sort(base::unique(srag_inc$SE)))
+
+# Gráfico de colunas
+ggplot(srag_inc, aes(x = SE)) +
+  geom_col(aes(y = casos), fill = "#1f77b4", width = 0.8) +  # colunas de casos
+  geom_line(aes(y = inc * base::max(casos) / base::max(inc)),  # linha de incidência reescalada
+            color = "red", size = 1.2, group = 1) +
+  scale_y_continuous(
+    name = "Número de casos",
+    sec.axis = sec_axis(~ . * base::max(srag_inc$inc) / base::max(srag_inc$casos),
+                        name = "Incidência por 100 mil hab.")
+  ) +
+  labs(
+    x = "Semana Epidemiológica",
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.title.y = element_text(color = "black", face = "bold"),
+    axis.title.y.right = element_text(color = "black", face = "bold"),
+    axis.text.x = element_text(face = "bold", color = "black"),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", color = "black")
+  )
+```
+
+```{r texto para o resumo técnico, echo = FALSE, results='asis'}
+gerar_texto_resumo_srag <- function(ano, total_notificacoes, media_semanal, dp_semanal, total_obitos, taxa_letalidade) {
+  
+  variabilidade <- case_when(
+    dp_semanal < 5 ~ "baixa variabilidade na distribuição semanal",
+    dp_semanal < 15 ~ "moderada variabilidade na distribuição semanal",
+    TRUE ~ "alta variabilidade na distribuição semanal"
+  )
+  
+  texto <- glue::glue(
+    "Em {ano}, foram notificados {total_notificacoes} casos de Síndrome Respiratória Aguda Grave (SRAG), ",
+    "com uma média de {round(media_semanal, 1)} casos por semana epidemiológica e um desvio padrão de {round(dp_semanal, 1)}, ",
+    "indicando {variabilidade} dos casos ao longo do ano. ",
+    if (total_obitos == 0) {
+      "Não foram registrados óbitos por SRAG no período, o que sugere um perfil de casos não graves em 2025."
+    } else if (total_obitos == 1) {
+      "Observou-se um único óbito atribuído à SRAG, resultando em uma taxa de letalidade de {round(taxa_letalidade, 1)}%,"
+      "o que sugere um perfil de casos predominantemente não graves no período avaliado."
+    } else {
+      "Foram registrados {total_obitos} óbitos, com uma taxa de letalidade de {round(taxa_letalidade, 1)}%, "
+      "refletindo a presença de casos com maior gravidade."
+    },
+    " A baixa letalidade e o padrão de notificações observados reforçam a importância da manutenção da vigilância epidemiológica ativa."
+  )
+  
+  return(texto)
+}
+```
+
+```{r resumo_situacao, echo=FALSE, results='asis'}
+# Filtro do ano de interesse
+
+
+# Total de notificações
+total_notificacoes <- base::nrow(srag_filtrado)
+
+# Casos por semana
+casos_semanal <- srag_filtrado %>%
+  group_by(SE) %>%
+  summarise(casos = n(), .groups = "drop")
+
+# Média e desvio padrão
+media_casos <- mean(casos_semanal$casos, na.rm = TRUE)
+dp_casos <-sd(casos_semanal$casos, na.rm = TRUE)
+
+# Total de óbitos
+total_obitos <- base::sum(srag_filtrado$OBITOSRAG == "Sim", na.rm = TRUE)
+
+# Taxa de letalidade (%)
+taxa_letalidade <- (total_obitos / total_notificacoes) * 100
+
+# Exibir resumo
+tibble::tibble(
+  `Total de notificações` = total_notificacoes,
+  `Média semanal de casos` = round(media_casos, 1),
+  `Desvio padrão semanal` = round(dp_casos, 1),
+  `Total de óbitos` = total_obitos,
+  `Taxa de letalidade (%)` = round(taxa_letalidade, 1)
+) %>%
+  knitr::kable(caption = paste("Resumo da Situação Epidemiológica –", ano_ref))
+
+texto_srag <- gerar_texto_resumo_srag(
+  ano = ano_ref,
+  total_notificacoes = total_notificacoes,
+  media_semanal = media_casos,
+  dp_semanal = dp_casos,
+  total_obitos = total_obitos,
+  taxa_letalidade = taxa_letalidade
+)
+
+texto_srag
+```
+
+
+
+## Vírus detectados
+
+```{r virus detectados, fig.width=9, fig.height=6,fig.height=6, fig.cap = paste0("Figura 3 – Proporção de vírus detectados de SRAG, Região Leste -", ano_ref, "(n = ", sum(df_tot$casos), ")")}
+cols_pcr <- names(virus_map)
+
+df_tot <- srag %>%
+  filter(ano == ano_ref) %>%
+  select(all_of(cols_pcr)) %>%
+  pivot_longer(cols = everything(), names_to = "virus", values_to = "valor") %>%
+  filter(valor == 1) %>%
+  mutate(virus = virus_map[virus]) %>%
+  count(virus, name = "casos") %>%
+  mutate(
+    percentual = casos / base::sum(casos) * 100,
+    virus = fct_reorder(virus, casos)  # ordena pelo total
+  )
+
+ggplot(df_tot, aes(x = virus, y = casos)) +
+  geom_col(fill = "#4E79A7") +
+  geom_text(
+    aes(label = paste0(casos, " (", round(percentual, 1), "%)")),
+    vjust = -0.3, size = 5
+  ) +
+  labs(
+    title = paste("Proporção de Detecção por Vírus (PCR+), Região Leste,", ano_ref),
+    x = "Tipo de Vírus",
+    y = "Número de Registros"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(face = "bold")
+  )
+
+
+
+
+```
+
+```{r texto para tipos de vírus,  echo = FALSE, results='asis'}
+gerar_texto_pcr_virus <- function(df_tot, ano) {
+  df_ord <- df_tot %>% arrange(desc(casos))
+  
+  top1 <- df_ord$virus[1]
+  top2 <- df_ord$virus[2]
+  top3 <- df_ord$virus[3]
+  
+  pct1 <- round(df_ord$percentual[1], 1)
+  pct2 <- round(df_ord$percentual[2], 1)
+  pct3 <- round(df_ord$percentual[3], 1)
+  
+  texto <- glue::glue(
+    "Em {ano}, entre os casos com detecção positiva por PCR na Região Leste, ",
+    "o {top1} foi o agente mais frequente, representando {pct1}% dos registros. ",
+    "Em seguida, destacaram-se o {top2} ({pct2}%) e o {top3} ({pct3}%). ",
+    "Os demais vírus apresentaram participação minoritária no total de detecções. ",
+    "Esses dados reforçam o papel dominante do {top1} na circulação viral respiratória ",
+    "durante o ano, com evidência de cocirculação de múltiplos agentes etiológicos."
+  )
+  
+  return(texto)
+}
+texto_pcr <- gerar_texto_pcr_virus(df_tot, ano = ano_ref)
+texto_pcr
+
+```
+
+## Tipo de vírus por Semana Epidemiológica
+
+```{r virus por SE, fig.width=9, fig.height=6,fig.height=6, fig.cap = paste0("Figura 4 – Proporção de vírus detectados no PCR de SRAG por semana epidemiológica, Região Leste -", ano_ref, "(n = ", base::sum(df_week$casos), ")")}
+ cols_pcr <- names(virus_map)
+
+# ─────────────────────────────────────────────────────────────
+# 1. Base de casos positivos por Semana Epidemiológica (SE) e vírus
+# ─────────────────────────────────────────────────────────────
+df_week <- srag %>%                                         # base original
+  filter(ano == ano_ref) %>%                                # ano de interesse
+  select(SE, all_of(cols_pcr)) %>%                         # colunas PCR (0/1)
+  mutate(SE = as.integer(SE)) %>%                          # garantir inteiro
+  pivot_longer(cols = -SE,
+               names_to = "virus",
+               values_to = "valor") %>%                    # formato longo
+  filter(valor == 1) %>%                                   # apenas positivos
+  mutate(virus_nome = virus_map[virus]) %>%                # rótulo compreensível
+  group_by(SE, virus_nome) %>%                             # contar por SE-vírus
+  summarise(casos = n(), .groups = "drop")
+
+# ─────────────────────────────────────────────────────────────
+# 2. Proporção global do ano (para exibir na legenda)
+# ─────────────────────────────────────────────────────────────
+proporcoes <- df_week %>%
+  group_by(virus_nome) %>%
+  summarise(total = sum(casos), .groups = "drop") %>%
+  mutate(percentual = total / base::sum(total) * 100,
+         virus_legenda = paste0(virus_nome,
+                                " (", round(percentual, 1), "%)"))
+
+# ─────────────────────────────────────────────────────────────
+# 3. Juntar proporção global na base principal
+# ─────────────────────────────────────────────────────────────
+df_week <- df_week %>%
+  left_join(proporcoes, by = "virus_nome")
+
+# ─────────────────────────────────────────────────────────────
+# 4. Calcular proporção semanal para gráfico 100 % empilhado
+# ─────────────────────────────────────────────────────────────
+df_week_prop <- df_week %>%
+  group_by(SE) %>%
+  mutate(prop = casos / base::sum(casos)) %>%    # proporção na semana
+  ungroup()
+
+# ─────────────────────────────────────────────────────────────
+# 5. Gráfico 100 % empilhado
+# ─────────────────────────────────────────────────────────────
+ggplot(df_week_prop,
+       aes(x = SE,
+           y = prop,
+           fill = virus_legenda)) +
+
+  geom_col(width = 0.95) +  # barras empilhadas
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +  # eixo em %
+  scale_fill_brewer(palette = "Set3") +  # nova paleta
+
+  labs(
+    x = "Semana Epidemiológica",
+    y = "Proporção de Vírus (%)",
+    fill = "Tipo de Vírus\n(participação no ano)"
+  ) +
+
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.title = element_text(face = "bold"),
+    legend.text  = element_text(size = 9),
+    axis.text.x  = element_text(angle = 45, hjust = 1)
+  )
+
+
+
+
+
+```
+
+```{r  echo = FALSE, results='asis'}
+gerar_texto_virus_temporal <- function(df_week, proporcoes, ano) {
+  total_semanas <- base::length(base::unique(df_week$SE))
+  
+  virus_top <- proporcoes %>%
+    arrange(desc(percentual)) %>%
+    slice_head(n = 2)
+  
+  pico_semana <- df_week %>%
+    group_by(SE) %>%
+    summarise(total = base::sum(casos)) %>%
+    slice_max(order_by = total, n = 1)
+  
+  texto <- glue::glue(
+    "A análise da circulação viral ao longo das semanas epidemiológicas de {ano} mostra um padrão sazonal concentrado entre as semanas ",
+    "{base::min(df_week$SE)} e {base::max(df_week$SE)}, com pico de detecções na semana {pico_semana$SE}, totalizando {pico_semana$total} registros. ",
+    "O {virus_top$virus_nome[1]} foi o agente predominante, seguido por {virus_top$virus_nome[2]}. ",
+    "Ambos apresentaram circulação acentuada durante o período epidêmico, sugerindo cocirculação. ",
+    "Demais vírus, como os identificados por menor proporção, tiveram presença limitada. ",
+    "Esse comportamento reforça a importância do monitoramento laboratorial contínuo para antecipação de surtos e gestão de resposta em saúde pública."
+  )
+  
+  return(texto)
+}
+texto_temporal <- gerar_texto_virus_temporal(df_week, proporcoes, ano = ano_ref)
+texto_temporal
+```
+
+## Hospitalizações
+
+
+
+```{r hospitalizacoes, fig.width=9, fig.height=6,fig.cap = paste0("Figura 5 – Número de hospitalizações de casos de SRAG por hospital, Região Leste -", ano_ref, "(n = ", total_notificacoes, ")")}
+
+df_13 <- srag %>%
+  filter(!is.na(NM_UN_INTE), ano == ano_ref) %>%
+  group_by(NM_UN_INTE) %>%
+  summarise(casos = n(), .groups = "drop")
+
+ggplot(df_13, aes(x = casos, y = reorder(NM_UN_INTE, casos))) +
+  geom_col(fill = "forestgreen", alpha = 0.7) +
+  labs(
+    x = "Casos",
+    y = "Unidade"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.y = element_text(size = 10))
+
+
+
+```
+
+```{r Texto hospitalizacoes, echo = FALSE,results='asis'}
+gerar_texto_hospitalizacoes <- function(df_unidades, ano) {
+  total <- base::sum(df_unidades$casos)
+  
+  df_top <- df_unidades %>%
+    arrange(desc(casos)) %>%
+    slice(1:2) %>%
+    mutate(percentual = round(casos / total * 100, 1))
+  
+  texto <- glue::glue(
+    "Em {ano}, as hospitalizações por SRAG na Região Leste concentraram-se majoritariamente em poucas unidades de saúde. ",
+    "O destaque absoluto foi o {df_top$NM_UN_INTE[1]}, responsável por aproximadamente {df_top$percentual[1]}% de todas as internações no período. ",
+    "Na sequência, o {df_top$NM_UN_INTE[2]} também apresentou volume expressivo de hospitalizações, com {df_top$percentual[2]}% dos casos. ",
+    "As demais unidades registraram quantitativos inferiores, muitas com menos de 5 registros. ",
+    "Esse padrão evidencia a centralização da assistência hospitalar em unidades específicas, possivelmente relacionada à capacidade instalada, ",
+    "perfil populacional atendido ou à definição regional de referência para SRAG."
+  )
+  
+  return(texto)
+}
+
+texto_hospitais <- gerar_texto_hospitalizacoes(df_13, ano = ano_ref)
+texto_hospitais
+
+```
+
+## Faixa etária
+
+
+```{r faixa etaria, fig.width=9, fig.height=6,fig.cap = paste0("Figura 6 – Proporção casos de SRAG por faixa etária, Região Leste -", ano_ref, "(n = ", base::sum(df_week$casos), ")")}
+df_2 <- srag %>%
+      filter(!is.na(FE1) & ano == ano_ref) %>%
+      mutate(FE1 = factor(FE1, levels = niveis_idade)) %>%
+      group_by(FE1) %>%
+      summarise(casos = n(), .groups = "drop") %>%
+      mutate(percentual = round(casos / sum(casos) * 100, 1))
+
+# Criar gráfico de faixa etária
+
+  ggplot(df_2, aes(x = FE1, y = casos)) +
+      geom_col(fill = "#4E79A7") +
+      geom_text(aes(label = paste0(percentual, "%")),
+                position = position_stack(vjust = 0.5), size = 5) +
+      labs(x = "Faixa Etária", y = "Casos") +
+      theme_minimal() +
+      theme(legend.position = "none",
+            axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  
+
+```
+
+```{r Texto faixa etaria, echo = FALSE,results='asis'}
+gerar_texto_faixa_etaria <- function(df_faixa, ano) {
+  total <- sum(df_faixa$casos)
+  
+  top2 <- df_faixa %>%
+    arrange(desc(casos)) %>%
+    slice(1:2)
+  
+  soma_top2 <- sum(top2$percentual)
+  
+  idosos <- df_faixa %>%
+    filter(FE1 %in% c("70 a 79", "80 ou mais")) %>%
+    summarise(pct_idoso = sum(percentual)) %>%
+    dplyr::pull(pct_idoso)
+  
+  texto <- glue::glue(
+    "Em {ano}, a análise da distribuição etária dos casos de SRAG na Região Leste evidencia um perfil predominantemente pediátrico. ",
+    "Cerca de {top2$percentual[1]}% dos registros ocorreram em {top2$FE1[1]}, enquanto {top2$percentual[2]}% concentraram-se em {top2$FE1[2]}. ",
+    "Juntas, essas duas faixas etárias representaram mais de {soma_top2}% do total de notificações. ",
+    "As demais faixas apresentaram percentuais reduzidos, com idosos acima de 70 anos representando {idosos}% dos casos. ",
+    "Esse padrão reforça a importância da vigilância ativa em populações infantis, especialmente nos períodos sazonais de maior circulação viral."
+  )
+  
+  return(texto)
+}
+
+texto_faixa <- gerar_texto_faixa_etaria(df_2, ano = ano_ref)
+texto_faixa
+
+```
+
+## Menores de 2 anos
+
+
+
+```{r proporcao_bebes,fig.width=9, fig.height=6,fig.cap = paste0("Figura 7 – Proporção casos de SRAG por de bebês menores de 1 ano por mês e dias de vida, Região Leste -", ano_ref, "(n = ", sum(df_week$casos), ")")}
+# Filtrar apenas bebês com idade em dias (1) ou meses (2) e vírus positivo
+df_3 <- srag %>%
+  filter(TP_IDADE %in% c(1, 2), ano == ano_ref) %>%
+  select(TP_IDADE, NU_IDADE_N, starts_with("PCR_")) %>%
+  pivot_longer(cols = starts_with("PCR_"),
+               names_to = "virus_codigo",
+               values_to = "positivo") %>%
+  filter(positivo == 1) %>%
+  mutate(
+    Tipo = case_when(
+      TP_IDADE == 1 ~ "Dias",
+      TP_IDADE == 2 ~ "Meses"
+    ),
+    virus_nome = virus_map[virus_codigo],
+    virus_nome = iconv(virus_nome, from = "", to = "UTF-8")  # <-- aqui!
+  ) %>%
+  drop_na(virus_nome)
+
+
+# Calcular proporção por idade e tipo
+df_3_prop <- df_3 %>%
+  group_by(Tipo, NU_IDADE_N) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(Tipo) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+ggplot(df_3_prop, aes(x = NU_IDADE_N, y = prop)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = scales::percent(prop, accuracy = 0.1)),
+            vjust = -0.3, size = 4) +
+  facet_wrap(~Tipo, scales = "free") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Idade",
+    y = "Proporção de casos"
+  ) +
+  theme_minimal()
+
+
+
+```
+
+```{r Texto menores de 2 anos, echo = FALSE,results='asis' }
+gerar_texto_srag_bebes <- function(df_3_prop, ano) {
+  pico_dias <- df_3_prop %>%
+    filter(Tipo == "Dias") %>%
+    slice_max(prop, n = 1)
+  
+  pico_meses <- df_3_prop %>%
+    filter(Tipo == "Meses") %>%
+    slice_max(prop, n = 1)
+  
+  texto <- glue::glue(
+    "A análise dos casos de SRAG com detecção viral entre bebês na Região Leste, em {ano}, revela um padrão de maior concentração ",
+    "nas faixas etárias mais precoces. Entre os recém-nascidos com idade registrada em dias, destaca-se um pico de casos aos ",
+    "{pico_dias$NU_IDADE_N} dias de vida, responsável por {scales::percent(pico_dias$prop, accuracy = 0.1)} das notificações desse subgrupo. ",
+    "Já entre os lactentes com idade expressa em meses, observa-se maior proporção de casos aos {pico_meses$NU_IDADE_N} mês(es), representando ",
+    "{scales::percent(pico_meses$prop, accuracy = 0.1)} das ocorrências. ",
+    "Esse perfil reforça a vulnerabilidade imunológica dos menores de 6 meses frente aos vírus respiratórios e destaca a importância ",
+    "de estratégias de proteção específicas para essa faixa etária, como o monitoramento da circulação viral, vacinação de contatos ",
+    "e fortalecimento da vigilância laboratorial."
+  )
+  
+  return(texto)
+}
+
+texto_bebes <- gerar_texto_srag_bebes(df_3_prop, ano = ano_ref)
+texto_bebes
+```
+
+
+
+```{r virus por bebes, fig.width=9, fig.height=6,fig.cap = paste0("Figura 8 – Proporção casos de SRAG por de bebês menores de 1 ano por mês e dias de vida e tipo de vírus detectados, Região Leste -", ano_ref, "(n = ", total_notificacoes, ")")}
+# 1. Calcular proporções
+df_3_prop <- df_3 %>%
+  count(Tipo, NU_IDADE_N, virus_nome, name = "n") %>%
+  group_by(Tipo, NU_IDADE_N) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+
+# 2. Gráfico empilhado 100%
+ggplot(df_3_prop, aes(x = NU_IDADE_N, y = prop, fill = virus_nome)) +
+  geom_col(position = "fill") +
+  facet_wrap(~Tipo, scales = "free") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Idade",
+    y = "Proporção (%)",
+    fill = "Vírus detectado"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 9),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_fill_brewer(palette = "Set3")  # ou substitua por viridis/metbrewer
+
+
+
+
+
+
+```
+
+```{r Texto v[irus bebes], echo= FALSE,results='asis'}
+df_virus <- df_3 %>%
+  filter(!is.na(virus_nome)) %>%
+  count(virus_nome, name = "n")
+
+gerar_texto_virus_bebes <- function(df_virus, ano) {
+  top_virus <- df_virus %>%
+    group_by(virus_nome) %>%
+    summarise(total = sum(n), .groups = "drop") %>%
+    arrange(desc(total)) %>%
+    slice(1:3)
+  
+  texto <- glue::glue(
+    "A análise da distribuição de vírus respiratórios entre bebês com SRAG na Região Leste, em {ano}, mostra que o {top_virus$virus_nome[1]} foi o agente predominante ",
+    "em praticamente todas as faixas etárias avaliadas, especialmente nos primeiros meses de vida. ",
+    "O {top_virus$virus_nome[2]} aparece como o segundo agente mais frequente, com detecções dispersas entre os meses iniciais. ",
+    "O {top_virus$virus_nome[3]} teve menor participação, mas esteve presente em várias faixas etárias. ",
+    "Esse padrão reforça o papel central do {top_virus$virus_nome[1]} nas hospitalizações de bebês, ",
+    "ressaltando a importância de ações preventivas específicas como imunização materna e medidas de proteção precoce."
+  )
+  
+  return(texto)
+}
+
+texto_virus_bebes <- gerar_texto_virus_bebes(df_virus, ano = ano_ref)
+texto_virus_bebes
+```
+## Uso de ventilação
+
+```{r ventilacao, fig.width=9, fig.height=6,fig.cap = paste0("Figura 9 – Proporção casos de SRAG por uso de suporte ventilatório, Região Leste -", ano_ref, "(n = ", total_notificacoes, ")")}
+ df_4 <- srag %>%
+   filter(ano == ano_ref, !is.na(SUPORT_VEN2)) |>
+      count(SUPORT_VEN2) %>%
+      rename(casos = n) %>%
+      mutate(percentual = round(casos / sum(casos) * 100, 1))
+    
+  ggplot(df_4, aes(x = SUPORT_VEN2, y = casos)) +
+      geom_col(fill = "#E15759") +
+      geom_text(aes(label = paste0(percentual, "%")),
+                position = position_stack(vjust = 0.5), size = 5) +
+      labs(x = "Tipo de Suporte", y = "Casos") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1),
+            legend.position = "none")
+  
+  
+
+    
+```
+
+```{r Texto ventilacao, echo = FALSE,results='asis'}
+gerar_texto_suporte_ventilatorio <- function(df_4, ano) {
+  df_ord <- df_4 %>% arrange(desc(casos))
+  
+  suporte1 <- df_ord$SUPORT_VEN2[1]
+  pct1     <- df_ord$percentual[1]
+  
+  suporte2 <- df_ord$SUPORT_VEN2[2]
+  pct2     <- df_ord$percentual[2]
+  
+  suporte3 <- df_ord$SUPORT_VEN2[3]
+  pct3     <- df_ord$percentual[3]
+  
+  texto <- glue::glue(
+    "Em {ano}, entre os casos de SRAG internados na Região Leste, observou-se que a maioria dos pacientes ({pct1}%) recebeu {tolower(suporte1)}, ",
+    "seguido por {pct2}% que necessitaram de {tolower(suporte2)}. ",
+    "Apenas {pct3}% dos pacientes não utilizaram suporte ventilatório. ",
+    "Esse padrão sugere uma carga significativa de casos graves, com demanda elevada por suporte respiratório, ",
+    "reforçando a importância do preparo da rede assistencial em períodos epidêmicos."
+  )
+  
+  return(texto)
+}
+
+texto_ventilacao <- gerar_texto_suporte_ventilatorio(df_4, ano = ano_ref)
+texto_ventilacao
+
+```
+
+## Óbitos
+
+
+```{r obitos, fig.width=9, fig.height=6,fig.cap = paste0("Figura 10 – Número de óbitos por SRAG por semana epidmeiológica, Região Leste -", ano_ref, "(n = ", sum(df_5$obitos), ")")}
+df_5 <- srag%>%
+  filter(ano == ano_ref) |>
+      group_by(ano, SE) %>%
+      summarise(obitos = sum(OBITOSRAG == "Sim", na.rm = TRUE), .groups = "drop")
+  
+   ggplot(df_5, aes(x =SE, y = obitos)) +
+      geom_col(fill = "red") +
+      labs( x = "Ano", y = "Óbitos") +
+      theme_minimal()
+  # Tabela com SE, vírus, faixa etária e número de óbitos
+tabela_obitos <- srag %>%
+  filter(OBITOSRAG == "Sim", !is.na(FE1), ano == ano_ref) %>%
+  select(SE,ID_MN_RESI_pad ,FE1, starts_with("PCR_")) %>%
+  pivot_longer(cols = starts_with("PCR_"),
+               names_to = "virus_codigo",
+               values_to = "positivo") %>%
+  filter(positivo == 1) %>%
+  mutate(
+    virus_nome = virus_map[virus_codigo],
+    virus_nome = iconv(virus_nome, from = "", to = "UTF-8"),
+    FE1 = factor(FE1, levels = niveis_idade),
+    Regiao_Administrativa = as.factor(ID_MN_RESI_pad)
+  ) %>%
+  drop_na(virus_nome) %>%
+  group_by(SE, virus_nome, FE1,Regiao_Administrativa) %>%
+  summarise(obitos = n(), .groups = "drop")
+
+# Exibir a tabela (em HTML)
+if (knitr::is_html_output()) {
+  DT::datatable(
+    tabela_obitos,
+    caption = "Óbitos por Semana Epidemiológica, Tipo de Vírus e Faixa Etária",
+    rownames = FALSE,
+    options = list(pageLength = 10, scrollX = TRUE)
+  )
+} else {
+  knitr::kable(
+    tabela_obitos,
+    caption = "Óbitos por Semana Epidemiológica, Tipo de Vírus e Faixa Etária"
+  )
+}
+
+
+
+```
+
+```{r Texto obitos, echo = FALSE,results='asis'}
+gerar_texto_obitos_semanal <- function(df_obitos, ano) {
+  total <- sum(df_obitos$obitos, na.rm = TRUE)
+  
+  if (total == 0) {
+    return(glue::glue(
+      "Em {ano}, não foram registrados óbitos por SRAG na Região Leste. ",
+      "Esse cenário de ausência de letalidade sugere uma predominância de casos clínicos leves ou manejo eficaz dos pacientes internados. ",
+      "Apesar disso, a vigilância contínua segue sendo essencial para resposta rápida a qualquer mudança no padrão de gravidade."
+    ))
+  } else {
+    semana <- df_obitos %>% filter(obitos > 0) %>% dplyr::pull(SE)
+    return(glue::glue(
+      "Em {ano}, foi registrado apenas um óbito por SRAG na Região Leste, concentrado na semana epidemiológica {semana}. ",
+      "A ausência de novos registros nas semanas seguintes indica um cenário de baixa letalidade no período avaliado, ",
+      "reforçando a importância de manter a vigilância ativa e o monitoramento contínuo de complicações."
+    ))
+  }
+}
+
+texto_obitos <- gerar_texto_obitos_semanal(df_5, ano = ano_ref)
+texto_obitos
+
+
+```
+
+## Internação por faixa etária
+
+```{r internacao, fig.width=9, fig.height=6,fig.cap = paste0("Figura 11 – Tempo de internação (em dias) por faixa etária, Região Leste -", ano_ref, "(n = ", total_notificacoes, ")")}
+df_6 <- srag %>%
+      filter(!is.na(Tempo_Evolucao), !is.na(FE1), ano == ano_ref) %>%
+      # garante a ordem correta das faixas
+      mutate(FE1 = factor(FE1, levels = niveis_idade))
+    
+  ggplot(df_6, aes(x = FE1, y = Tempo_Evolucao)) +
+      geom_boxplot(fill = "#59A14F") +
+      labs(
+        title = paste("Tempo de Internação (dias) por Faixa Etária",ano_ref),
+        x     = "Faixa Etária",
+        y     = "Dias"
+      ) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  
+
+```
+
+```{r Texto faixa etaria e tempo de internacao, echo = FALSE,results='asis'}
+gerar_texto_tempo_internacao <- function(df_6, ano) {
+  # Medianas por faixa etária
+  resumo <- df_6 %>%
+    group_by(FE1) %>%
+    summarise(mediana = median(Tempo_Evolucao, na.rm = TRUE), .groups = "drop") %>%
+    arrange(desc(mediana))
+  
+  faixa_top1 <- resumo$FE1[1]
+  med_top1   <- resumo$mediana[1]
+  
+  faixa_top2 <- resumo$FE1[2]
+  med_top2   <- resumo$mediana[2]
+  
+  faixa_inf <- resumo %>%
+    filter(FE1 %in% c("Menor de 2", "2 a 10")) %>%
+    summarise(mediana = base::round(base::mean(mediana, na.rm = TRUE), 1)) %>%
+    dplyr::pull(mediana)
+  
+  texto <- glue::glue(
+    "Em {ano}, a análise da duração das internações por SRAG na Região Leste revelou diferenças expressivas entre as faixas etárias. ",
+    "Pacientes com {faixa_top1} apresentaram os maiores tempos de internação, com mediana de aproximadamente {med_top1} dias, ",
+    "seguido pelo grupo de {faixa_top2}, com {med_top2} dias. ",
+    "Já entre crianças menores de 10 anos, as internações foram significativamente mais curtas, com mediana média de {faixa_inf} dias. ",
+    "Esses achados destacam a maior complexidade clínica entre adultos e idosos, com impacto direto na carga assistencial e uso prolongado de leitos hospitalares."
+  )
+  
+  return(texto)
+}
+texto_internacao <- gerar_texto_tempo_internacao(df_6, ano = ano_ref)
+texto_internacao
+```
+
+## Evolução
+
+```{r evolucao, fig.width=9, fig.height=6,fig.cap = paste0("Figura 12 – Proporção de casos de SRAG segundo evolução, Região Leste -", ano_ref, "(n = ", total_notificacoes, ")")}
+df_9 <- srag%>%
+      filter(!is.na(EVOL1), ano == ano_ref) %>%
+      group_by(EVOL1) %>% summarise(casos=n(), .groups="drop") |>
+      mutate(percentual = round(casos / sum(casos) * 100, 1))
+
+  ggplot(df_9, aes(x=reorder(EVOL1, casos), y=casos)) +
+      geom_col(fill="#F28E2B") +
+    geom_text(aes(label = paste0(percentual, "%")),
+                position = position_stack(vjust = 0.5), size = 5) +
+      labs(title=paste("Percentual de internação por tipo de evolução na Região Leste",ano_ref), x="Desfecho", y="Casos") +
+      theme_minimal() + theme(legend.position="none")
+  
+
+
+```
+
+```{r TEXTO EVOLUCAO, echo = FALSE,results='asis'}
+gerar_texto_evolucao <- function(df_9, ano) {
+  df_ordenado <- df_9 %>% arrange(desc(casos))
+  
+  cura_pct <- df_ordenado %>% filter(grepl("Cura", EVOL1)) %>% dplyr::pull(percentual)
+  ignorado_pct <- df_ordenado %>% filter(grepl("Ignorado", EVOL1)) %>% dplyr::pull(percentual)
+  obito_srag <- df_ordenado %>% filter(grepl("^Óbito$", EVOL1)) %>% dplyr::pull(percentual)
+  obito_outros <- df_ordenado %>% filter(grepl("outras causas", EVOL1)) %>% dplyr::pull(percentual)
+  
+  texto <- glue::glue(
+    "Em {ano}, a maioria dos casos internados por SRAG na Região Leste evoluiu para cura, representando {cura_pct}% dos registros com desfecho informado. ",
+    "Cerca de {ignorado_pct}% dos casos permaneceram com evolução ignorada, o que indica ausência de encerramento adequado no sistema. ",
+    "A letalidade observada foi baixa: {obito_srag}% dos casos evoluíram para óbito por SRAG, e {obito_outros}% para óbito por outras causas. ",
+    "Enquanto a alta proporção de cura aponta para um manejo clínico eficaz, a presença significativa de registros ignorados evidencia a importância de fortalecer a vigilância e qualificação dos dados de encerramento."
+  )
+  
+  return(texto)
+}
+
+  texto_evolucao <- gerar_texto_evolucao(df_9, ano = ano_ref)
+texto_evolucao
+
+```
+
+# Diagrama de controle de SRAG 
+
+```{r diagrama de controle Leste, fig.width=9, fig.height=6,fig.cap = paste0("Figura 13 – Diagrama de controle de SRAG por semana epidmeiológica, Região Leste -", ano_ref, ".")}
+anos_hist <- (ano_ref - 10):(ano_ref - 1)
+
+# Juntar com população correta
+df_10 <- srag %>%
+  left_join(pop, by = c("ano", "ID_MN_RESI_pad")) %>%
+  filter(!is.na(populacao)) %>%
+  mutate(incidencia = 100000 / populacao)  # 1 caso por linha
+
+# Histórico
+historico <- df_10 %>%
+   filter(ano %in% anos_hist, !ano %in% ano_epidemico) %>%
+  group_by(SE, ano) %>%
+  summarise(casos = n(), pop = populacao, .groups = "drop") %>%
+  mutate(inc = 100000 * casos / pop)
+
+limiares <- historico %>%
+  group_by(SE) %>%
+  summarise(
+    media = base::mean(inc),
+    sd = sd(inc),
+    lim_1 = media + sd,
+    lim_2 = media + 2 * sd,
+    lim_3 = media + 3 * sd,
+    .groups = "drop"
+  )
+
+# Dados atuais (ano de referência)
+atual <- df_10 %>%
+  filter(ano == ano_ref) %>%
+  group_by(SE) %>%
+  summarise(casos = n(), pop = first(populacao), .groups = "drop") %>%
+  mutate(inc = 100000 * casos / pop)
+
+
+#Nowcasting dos casos
+
+# Calcular a média móvel (lag = 1, para não usar valores futuros)
+atual <- atual %>%
+  arrange(SE) %>%
+  mutate(
+    inc_ma = rollmean(inc, k = 4, align = "right", fill = NA)
+  )
+
+# Última SE registrada no ano de referência
+ultima_SE <- base::max(atual$SE, na.rm = TRUE)
+
+# Fator de correção fixo (exemplo: 1.2). Você pode usar um nowcast_fator se quiser.
+fator_nowcasting <- 1.2
+
+# Corrigir nas 4 últimas semanas com base na média móvel
+nowcast <- atual %>%
+  filter(SE >= (ultima_SE - 8), SE <= ultima_SE-1) %>%
+  mutate(
+    inc_corrigida = inc_ma,
+    ic_low = inc_corrigida * 0.9,
+    ic_up  = inc_corrigida * 1.1
+  ) %>%
+  drop_na(inc_corrigida)
+
+
+# Gráfico
+# 🖼 Gráfico com legenda
+caption_text <- paste0(
+  "Anos de referência para os limiares ", 
+  base::min(filtro_ano), " a ", base::max(filtro_ano), 
+  ". Retirando o ano epidêmico de:", ano_epidemico
+)
+
+ggplot() +
+  geom_ribbon(data = limiares, aes(x = SE, ymin = 0, ymax = media, fill = "Zona de controle"), alpha = 0.3) +
+  geom_ribbon(data = limiares, aes(x = SE, ymin = media, ymax = lim_1, fill = "Zona de segurança"), alpha = 0.3) +
+  geom_ribbon(data = limiares, aes(x = SE, ymin = lim_1, ymax = lim_2, fill = "Zona de alerta"), alpha = 0.3) +
+  geom_ribbon(data = limiares, aes(x = SE, ymin = lim_2, ymax = lim_3, fill = "Zona epidêmica"), alpha = 0.3) +
+
+  geom_line(data = atual, aes(x = SE, y = inc, color = "Incidencia atual"), size = 1.2) +
+
+  # Nowcasting
+  geom_ribbon(data = nowcast, aes(x = SE, ymin = ic_low, ymax = ic_up),
+            fill = "gray50", alpha = 0.3) +
+geom_line(data = nowcast, aes(x = SE, y = inc_corrigida, color = "Incidencia corrigida"),
+          linewidth = 1.2)+
+
+
+  labs(
+    x = "Semana Epidemiológica",
+    y = "Incidência por 100 mil hab.",
+    fill = "Faixas de risco",
+    color = "",
+    caption = caption_text
+  ) +
+  scale_fill_manual(
+  values = c(
+      "Zona de controle" = "green",
+      "Zona de segurança" = "yellow",
+      "Zona de alerta" = "orange",
+      "Zona epidêmica" = "red"
+  ),
+   breaks = c("Zona de controle", "Zona de segurança", "Zona de alerta", "Zona epidêmica")
+)+
+  scale_color_manual(values = c("Incidencia atual" = "blue", "Incidencia corrigida" = "red")) +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r Texto Diagrama de controle, echo=FALSE, results='asis',results='asis'}
+gerar_bloco_diagrama_controle_recente <- function(atual, limiares, nowcast, ano, regiao = "Região Leste") {
+  library(dplyr)
+  library(glue)
+  
+  # Determinar últimas 4 semanas disponíveis no nowcast
+  semanas_recentes <- tail(base::sort(nowcast$SE), 4)
+
+  # Classificar zona apenas para semanas recentes
+  zonas_recentes <- nowcast %>%
+  filter(SE %in% semanas_recentes) %>%
+  left_join(limiares, by = "SE") %>%
+  mutate(
+    zona = case_when(
+      inc_corrigida <= media ~ "zona de controle",
+      inc_corrigida <= lim_1 ~ "zona de segurança",
+      inc_corrigida <= lim_2 ~ "zona de alerta",
+      TRUE                  ~ "zona epidêmica"
+    )
+  )
+
+
+  # Zona predominante nas últimas 4 semanas
+  zona_predom <- zonas_recentes %>%
+    count(zona) %>%
+    arrange(desc(n)) %>%
+    slice(1) %>%
+    dplyr::pull(zona)
+
+ cor_emojis <- c(
+  "zona de controle" = "<span style='color:#2ECC71'>&#9679;</span>",     # verde
+  "zona de segurança" = "<span style='color:#F1C40F'>&#9679;</span>",    # amarelo
+  "zona de alerta" = "<span style='color:#E67E22'>&#9679;</span>",       # laranja
+  "zona epidêmica" = "<span style='color:#E74C3C'>&#9679;</span>"        # vermelho
+)
+
+
+  cor_nomes <- c(
+    "zona de controle" = "verde",
+    "zona de segurança" = "amarelo",
+    "zona de alerta" = "laranja",
+    "zona epidêmica" = "vermelho"
+  )
+
+  emoji <- cor_emojis[zona_predom]
+  cor_nome <- cor_nomes[zona_predom]
+
+  # Tendência recente do nowcasting
+  nowcast <- nowcast %>% arrange(SE)
+  delta <- if (base::nrow(nowcast) >= 2) {
+    dplyr::last(nowcast$inc_corrigida) - dplyr::lag(nowcast$inc_corrigida, 1) %>% dplyr::last()
+  } else {
+    0
+  }
+
+  tendencia <- case_when(
+    delta < -0.5 ~ "declínio",
+    delta > 0.5  ~ "aumento",
+    TRUE         ~ "estabilidade"
+  )
+
+  # Texto final
+  glue::glue(
+"
+ Nas últimas 4 semanas epidemiológicas analisadas, os níveis de incidência de SRAG na {regiao} mantiveram-se predominantemente na **{emoji} {zona_predom}**.  
+ 
+A tendência da curva corrigida por atraso de notificação indica um padrão de **{tendencia}**, sugerindo que o cenário atual tende a se **manter ou evoluir em curto prazo** nessa mesma zona de risco.  
+ 
+Com base na situação recente, recomenda-se a ativação do **nível {emoji} _{cor_nome}_** do plano de contingência, com foco nas seguintes ações:
+
+* Reforço da vigilância e encerramento oportuno de casos;  
+* Avaliação da capacidade de resposta hospitalar e laboratorial;  
+* Comunicação contínua com equipes locais e população em risco.
+"
+  )
+}
+
+bloco_recentes <- gerar_bloco_diagrama_controle_recente(atual, limiares, nowcast, ano = ano_ref)
+bloco_recentes
+
+
+```
+
+
+## Diagrama de controle por RA
+
+```{r Diagrama de controle por RA, fig.width=14, fig.height=10,fig.cap = paste0("Figura 14 – Diagrama de controle de SRAG por semana epidmeiológica e Região Administrativa, Região Leste -", ano_ref, ".")}
+
+nome_ra_formatado <- function(nome) {
+  nome <- tolower(nome)
+  case_when(
+    nome == "paranoa" ~ "Paranoá",
+    nome == "sao sebastiao" ~ "São Sebastião",
+    nome == "itapoa" ~ "Itapoã",
+    nome == "jardim botanico" ~ "Jardim Botânico",
+    TRUE ~ tools::toTitleCase(nome)  # capitaliza o resto
+  )
+}
+
+# Preparar base com incidência (como antes)
+df_ra <- srag %>%
+  left_join(pop, by = c("ano", "ID_MN_RESI_pad")) %>%
+  filter(!is.na(populacao)) %>%
+  mutate(incidencia = 100000 / populacao)
+
+# Anos de histórico (excluindo anos epidêmicos)
+anos_hist <- (ano_ref - 10):(ano_ref - 1)
+anos_hist <- setdiff(anos_hist, ano_epidemico)
+
+# Limiares por RA
+historico_ra <- df_ra %>%
+  filter(ano %in% anos_hist) %>%
+  group_by(SE, ID_MN_RESI_pad, ano) %>%  # <-- adiciona o ano
+  summarise(casos = n(), pop = first(populacao), .groups = "drop") %>%
+  mutate(inc = 100000 * casos / pop)
+
+
+limiares_ra <- historico_ra %>%
+  group_by(SE, ID_MN_RESI_pad) %>%
+  summarise(
+    media = mean(inc),
+    sd = sd(inc),
+    lim_1 = media + sd,
+    lim_2 = media + 2 * sd,
+    lim_3 = media + 2 * sd,
+    .groups = "drop"
+  )
+
+
+# Dados atuais
+atual_ra <- df_ra %>%
+  filter(ano == ano_ref) %>%
+  group_by(SE, ID_MN_RESI_pad) %>%
+  summarise(casos = n(), pop = base::mean(populacao), .groups = "drop") %>%
+  mutate(inc = 100000 * casos / pop) %>%
+  arrange(ID_MN_RESI_pad, SE) %>%
+  group_by(ID_MN_RESI_pad) %>%
+  mutate(inc_ma = zoo::rollmean(inc, k = 4, align = "right", fill = NA)) %>%
+  ungroup()
+
+# Últimas 5 semanas por RA
+ultima_SE <- base::max(atual_ra$SE, na.rm = TRUE)
+
+nowcast_ra <- atual_ra %>%
+  filter(SE >= (ultima_SE - 8), SE <= ultima_SE-1) %>%
+  mutate(
+    inc_corrigida = inc_ma,
+    ic_low = inc_corrigida * 0.9,
+    ic_up  = inc_corrigida * 1.1
+  ) %>%
+  drop_na(inc_corrigida)
+
+limiares_ra <- limiares_ra %>%
+  mutate(nome_formatado = nome_ra_formatado(ID_MN_RESI_pad))
+
+atual_ra <- atual_ra %>%
+  mutate(nome_formatado = nome_ra_formatado(ID_MN_RESI_pad))
+
+nowcast_ra <- nowcast_ra %>%
+  mutate(nome_formatado = nome_ra_formatado(ID_MN_RESI_pad))
+
+
+# Gráfico facetado por Região Administrativa
+ggplot() +
+  geom_ribbon(data = limiares_ra, aes(x = SE, ymin = 0, ymax = media, fill = "Zona de controle"), alpha = 0.3) +
+  geom_ribbon(data = limiares_ra, aes(x = SE, ymin = media, ymax = lim_1, fill = "Zona de segurança"), alpha = 0.3) +
+  geom_ribbon(data = limiares_ra, aes(x = SE, ymin = lim_1, ymax = lim_2, fill = "Zona de alerta"), alpha = 0.3) +
+  geom_ribbon(data = limiares_ra, aes(x = SE, ymin = lim_2, ymax = lim_3, fill = "Zona epidêmica"), alpha = 0.3) +
+
+  geom_line(data = atual_ra, aes(x = SE, y = inc, color = "Incidência atual"), linewidth = 1) +
+
+  geom_ribbon(data = nowcast_ra, aes(x = SE, ymin = ic_low, ymax = ic_up), fill = "gray50", alpha = 0.3) +
+  geom_line(data = nowcast_ra, aes(x = SE, y = inc_corrigida, color = "Incidência corrigida"), 
+            linewidth = 1.1) +
+
+  facet_wrap(~nome_formatado, scales = "free_y") +
+
+  scale_fill_manual(
+    values = c(
+      "Zona de controle" = "green",
+      "Zona de segurança" = "yellow",
+      "Zona de alerta" = "orange",
+      "Zona epidêmica" = "red"
+    ),
+    breaks = c("Zona de controle", "Zona de segurança", "Zona de alerta", "Zona epidêmica")
+  ) +
+  scale_color_manual(values = c(
+    "Incidência atual" = "blue",
+    "Incidência corrigida" = "red"
+  )) +
+  labs(
+    x = "Semana Epidemiológica",
+    y = "Incidência por 100 mil hab.",
+    fill = "Faixas de risco",
+    color = "",
+    caption = caption_text
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    strip.text = element_text(face = "bold", size = 11)
+  )
+
+
+
+
+```
+
+```{r Texto diagrama por RA, echo = FALSE,results='asis'}
+gerar_tabela_diagrama_ra <- function(atual_ra, limiares_ra, nowcast_ra, ano) {
+  library(dplyr)
+  
+  ra_list <- base::unique(nowcast_ra$ID_MN_RESI_pad)
+
+ cor_emojis <- c(
+  "zona de controle" = "<span style='color:#2ECC71'>&#9679;</span>",     # verde
+  "zona de segurança" = "<span style='color:#F1C40F'>&#9679;</span>",    # amarelo
+  "zona de alerta" = "<span style='color:#E67E22'>&#9679;</span>",       # laranja
+  "zona epidêmica" = "<span style='color:#E74C3C'>&#9679;</span>"        # vermelho
+)
+
+
+  cor_nomes <- c(
+    "zona de controle" = "verde",
+    "zona de segurança" = "amarelo",
+    "zona de alerta" = "laranja",
+    "zona epidêmica" = "vermelho"
+  )
+
+  tabela <- lapply(ra_list, function(ra) {
+    dados_atual <- atual_ra %>% filter(ID_MN_RESI_pad == ra)
+    dados_limiar <- limiares_ra %>% filter(ID_MN_RESI_pad == ra)
+    dados_nowcast <- nowcast_ra %>% filter(ID_MN_RESI_pad == ra) %>% arrange(SE)
+    
+    semanas_finais <- tail(base::sort(dados_nowcast$SE), 4)
+    
+    zonas_finais <- dados_nowcast %>%
+  filter(SE %in% semanas_finais) %>%
+  left_join(dados_limiar, by = "SE") %>%
+  mutate(
+    zona = case_when(
+      inc_corrigida <= media ~ "zona de controle",
+      inc_corrigida <= lim_1 ~ "zona de segurança",
+      inc_corrigida <= lim_2 ~ "zona de alerta",
+      TRUE                   ~ "zona epidêmica"
+    )
+  )
+
+    
+    zona_predom <- zonas_finais %>%
+      count(zona) %>%
+      arrange(desc(n)) %>%
+      slice(1) %>%
+      dplyr::pull(zona)
+    
+    emoji <- cor_emojis[zona_predom]
+    cor_nome <- cor_nomes[zona_predom]
+
+    delta <- if (base::nrow(dados_nowcast) >= 2) {
+      dplyr::last(dados_nowcast$inc_corrigida) - dplyr::lag(dados_nowcast$inc_corrigida, 1) %>% dplyr::last()
+    } else {
+      0
+    }
+
+    tendencia <- case_when(
+      delta < -0.5 ~ "declínio",
+      delta > 0.5  ~ "aumento",
+      TRUE         ~ "estabilidade"
+    )
+
+    texto <- paste0(
+      "Nas últimas semanas, a incidência de SRAG manteve-se predominantemente na **", 
+      emoji, " ", zona_predom, "**, com tendência de **", tendencia, "**. ",
+      "Recomenda-se ativar o nível **", cor_nome, "** do plano de contingência, com reforço da vigilância e atenção aos indicadores locais."
+    )
+
+    data.frame(
+      Zona_de_Risco = paste(emoji, zona_predom),
+      RA = ra,
+      Recomendação = texto
+    )
+  })
+
+  do.call(rbind, tabela)
+}
+
+tabela_diagrama <- gerar_tabela_diagrama_ra(atual_ra, limiares_ra, nowcast_ra, ano = ano_ref)
+
+# Gera a tabela
+knitr::kable(
+  tabela_diagrama,
+  format = "markdown",
+  escape = FALSE,
+  align = "l",
+  col.names = c("Zona de Risco", "Região Administrativa", "Recomendação")
+)
+
+```
+
+
+
+# Taxa de transmissibilidade viral
+
+```{r transmissibilidade-por-ra, warning=FALSE, message=FALSE, fig.width=13, fig.height=10, results='asis',fig.cap = paste0("Figura 15 – Taxa de transmissibilidade viral (RT) por semana epidmeiológica e Região Administrativa, Região Leste -", ano_ref, ")")}
+# Lista com um gráfico por RA (faceteando os vírus dentro de cada RA)
+# Dicionário de nomes corrigidos
+nome_ra_formatado <- function(nome) {
+  nome <- tolower(nome)
+  case_when(
+    nome == "paranoa" ~ "Paranoá",
+    nome == "sao sebastiao" ~ "São Sebastião",
+    nome == "itapoa" ~ "Itapoã",
+    nome == "jardim botanico" ~ "Jardim Botânico",
+    TRUE ~ tools::toTitleCase(nome)  # capitaliza o resto
+  )
+}
+
+
+# 1. Identificar colunas de PCR confirmadas
+col_pcr <- base::grep("^PCR_", base::names(srag), value = TRUE)
+col_pcr <- base::setdiff(col_pcr, "PCR_RESUL")
+
+# 2. Base longa com vírus confirmados
+srag_long <- srag %>%
+  filter(ano == ano_ref)|>
+  select(ID_MN_RESI_pad, DT_SIN_PRI, all_of(col_pcr)) %>%
+  pivot_longer(cols = all_of(col_pcr), names_to = "virus", values_to = "confirmado") %>%
+  filter(confirmado == 1, !is.na(DT_SIN_PRI)) %>%
+  mutate(
+    semana = epiweek(DT_SIN_PRI),
+    ano = year(DT_SIN_PRI),
+    virus_traduzido = virus_map[virus]
+  )
+
+# 3. Incidência por semana, vírus, RA
+incidencia <- srag_long %>%
+  group_by(ano, semana, ID_MN_RESI_pad, virus_traduzido) %>%
+  summarise(casos = n(), .groups = "drop") %>%
+  left_join(pop, by = c("ano", "ID_MN_RESI_pad")) %>%
+  mutate(incidencia_100k = casos / populacao * 1e5)
+
+# 4. Função para calcular Rt por vírus/RA
+calcular_rt <- function(df) {
+  if (base::nrow(df) < 8) base::return(NULL)
+  incid <- df %>% arrange(ano, semana) %>% dplyr::pull(casos)
+
+  config <- make_config(list(mean_si = 3.5, std_si = 2.5))
+
+  res <- tryCatch({
+    estimate_R(incid, method = "parametric_si", config = config)
+  }, error = function(e) NULL)
+
+  if (base::is.null(res)) base::return(NULL)
+
+  data.frame(
+    t = res$R$t_end,
+    Rt = res$R$`Mean(R)`,
+    low = res$R$`Quantile.0.025(R)`,
+    high = res$R$`Quantile.0.975(R)`,
+    semana = df$semana[res$R$t_end],
+    ano = df$ano[res$R$t_end],
+    ID_MN_RESI_pad = df$ID_MN_RESI_pad[1],
+    virus = df$virus_traduzido[1]
+  )
+}
+
+# 5. Aplicar por grupo
+resultados_rt <- incidencia %>%
+  group_split(ID_MN_RESI_pad, virus_traduzido) %>%  # remove 'semana' do split
+  map_dfr(calcular_rt)
+
+
+graficos_ra <- resultados_rt %>%
+  split(.$ID_MN_RESI_pad) %>%
+  keep(~ nrow(.x) > 0) %>%
+  map(~ {
+    df_ra <- .x
+    ultima_semana <- df_ra %>%
+      group_by(virus) %>%
+      filter(semana == base::max(semana, na.rm = TRUE)) %>%
+      ungroup()
+
+  
+# Gráfico com o nome corrigido
+ggplot(df_ra, aes(x = semana, y = Rt)) +
+  geom_line(color = "#1f77b4") +
+  geom_ribbon(aes(ymin = low, ymax = high), fill = "#aec7e8", alpha = 0.3) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  geom_text(
+    data = ultima_semana,
+    aes(label = sprintf("Rt: %.2f", Rt)),
+    vjust = -0.5, hjust = 1, size = 5, color = "black"
+  ) +
+  facet_wrap(~ virus, scales = "free_y", ncol = 2) +
+  labs(
+    title = nome_ra_formatado(base::unique(df_ra$ID_MN_RESI_pad)),
+    x = "Semana Epidemiológica", y = "Rt estimado"
+  ) +
+  theme_minimal(base_size = 14)
+})
+
+
+# Juntar os gráficos em um grid
+grid_completo <- wrap_plots(graficos_ra, ncol = 2)
+
+# Exibir ou salvar
+grid_completo
+```
+
+
+O códig de interpretação do Rt pode ter alguns erros, atente-se a essas interpretações básicas e adeque no boletim:
+Se o valor do Rt for < 1 significa que a circulação está com tendência de queda. Enquanto valores > 1 significa que está em tendência de aumento e circulação sustentada.
+```{r Texto RT, echo=FALSE, results='asis'}
+
+# 1. Interpretar transmissibilidade por RA e vírus com base no Rt
+interpretacao_por_ra_virus <- resultados_rt %>%
+  filter(!is.na(Rt)) %>%
+  mutate(
+    Rt_maior_que_1 = Rt > 1.05,
+    Rt_menor_que_1 = Rt < 1
+  ) %>%
+  group_by(ID_MN_RESI_pad, virus) %>%
+  summarise(
+    semanas_com_Rt_maior_que_1 = sum(Rt_maior_que_1),
+    semanas_com_Rt_menor_que_1 = sum(Rt_menor_que_1),
+    total_semanas = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    pct_maior = semanas_com_Rt_maior_que_1 / total_semanas * 100,
+    pct_menor = semanas_com_Rt_menor_que_1 / total_semanas * 100,
+    Interpretacao = case_when(
+      pct_maior >= 60 ~ glue(
+        "Em {round(pct_maior, 1)}% das semanas analisadas, o Rt foi superior a 1, indicando uma transmissão sustentada do vírus. ",
+        "Este padrão sugere uma circulação viral ativa e contínua ao longo do período."
+      ),
+      pct_menor >= 80 ~ glue(
+        "Em {round(pct_menor, 1)}% das semanas, o Rt permaneceu abaixo de 1, o que indica que a transmissão esteve consistentemente controlada na região durante o período analisado."
+      ),
+      pct_maior >= 30 ~ glue(
+        "O Rt foi superior a 1 em {round(pct_maior, 1)}% das semanas e inferior a 1 em {round(pct_menor, 1)}%, ",
+        "o que sugere uma transmissão intermitente, com alternância entre crescimento e controle da circulação viral."
+      ),
+      pct_maior > 0 ~ glue(
+        "O Rt superou 1 em {round(pct_maior, 1)}% das semanas, indicando possíveis surtos pontuais. ",
+        "A maior parte do tempo, entretanto, o Rt permaneceu próximo ou abaixo de 1, sugerindo um padrão de controle relativo."
+      ),
+      TRUE ~ glue(
+        "O Rt permaneceu abaixo de 1 em todas as semanas analisadas, evidenciando controle sustentado da transmissão do vírus durante o período."
+      )
+    ),
+    `Região Administrativa` = nome_ra_formatado(ID_MN_RESI_pad)
+  ) %>%
+  select(`Região Administrativa`, Vírus = virus, Interpretacao)
+
+
+# 5. Imprimir como tabela Markdown
+cat("\n\n### Resumo por Região Administrativa – Transmissibilidade por Vírus\n\n")
+
+knitr::kable(interpretacao_por_ra_virus, format = "pandoc", align = "l")
+```
+
