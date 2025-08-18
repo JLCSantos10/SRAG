@@ -1,14 +1,14 @@
-📊 Atualização do Boletim de Síndrome Respiratória Aguda Grave (SRAG)
+# 📊 Atualização do Boletim de Síndrome Respiratória Aguda Grave (SRAG)
 
 Este repositório contém os scripts e procedimentos necessários para atualização automática do Boletim Epidemiológico de Síndrome Respiratória Aguda Grave (SRAG) da Região Leste do Distrito Federal.
 
 A execução do código gera automaticamente um arquivo Word com os indicadores, gráficos e análises atualizadas.
 
-🎯 Objetivo
+# 🎯 Objetivo
 
 Automatizar a construção e atualização do boletim epidemiológico de SRAG, garantindo padronização e reprodutibilidade.
 
-✅ Requisitos
+# ✅ Requisitos
 
 R e RStudio instalados
 
@@ -26,7 +26,7 @@ Nome das colunas nos arquivos
 
 Antes de rodar, certifique-se de que nenhum dos arquivos (boletim, planilha de monitoramento, subnotificações) esteja aberto.
 
-📂 Estrutura esperada dos arquivos
+# 📂 Estrutura esperada dos arquivos
 
 srag_min → Planilha com os casos de SRAG (nome pode variar, mas sempre começa com Casos_SRAG).
 
@@ -38,7 +38,7 @@ BOLETIM_SRAG.Rmd → Modelo do boletim em formato RMarkdown.
 
 atualizar_boletim.bat → Arquivo de execução rápida (roda todos os scripts automaticamente).
 
-⚙️ Como atualizar o boletim
+# ⚙️ Como atualizar o boletim
 
 Defina o ano de referência
 
@@ -78,19 +78,19 @@ Atualize os campos do sumário.
 
 Copie o conteúdo para o modelo final do boletim de SRAG, se necessário.
 
-📝 Observações importantes
+# 📝 Observações importantes
 
 Ao atualizar, o arquivo Word anterior será substituído.
 
-🔔 Se precisar manter versões anteriores, salve cópias antes de rodar novamente.
+# 🔔 Se precisar manter versões anteriores, salve cópias antes de rodar novamente.
 
 O nome da planilha de casos pode variar, mas o script reconhece qualquer arquivo que comece com Casos_SRAG.
 
-📌 Histórico de Revisão
+# 📌 Histórico de Revisão
 
 v1.0 (06/2025) – Criação do procedimento de atualização automatizada do Boletim SRAG.
 
-👨‍💻 Autor
+# 👨‍💻 Autor
 
 José Lucas Costa dos Santos
 Residente de Vigilância em Saúde – UnB
