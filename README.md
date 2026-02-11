@@ -230,13 +230,16 @@ Checar NA e pop == 0 antes de calcular incidência.
 
 Exemplo de proteção:
 
+```bash
 r
-Copiar código
+
 stopifnot(nrow(df_plot) > 0)
+```
 🛠️ Solução de problemas
+
 1) invalid multibyte character
 Causa: arquivo .R, .Rmd ou .yaml salvo fora de UTF-8.
-
+```bash
 ✅ Solução:
 
 Salvar render_boletim.R, BOLETIM_SRAG.Rmd e params.yaml em UTF-8 (sem BOM)
@@ -245,7 +248,8 @@ Garantir linha final no params.yaml
 
 2) Pandoc não encontrado
 Causa: o Rscript não encontrou o Pandoc (mesmo com RStudio instalado).
-
+```
+```bash
 ✅ Solução:
 
 No RStudio, rode:
@@ -257,7 +261,8 @@ Ajuste o render_boletim.R para apontar para esse caminho quando rodar via Rscrip
 
 3) Indicadores “zerados” após left_join(pop)
 Causa comum: chave territorial inconsistente (municipio como texto vs código IBGE / RA no DF).
-
+```
+```bash
 ✅ Solução:
 
 Preferir join por código (ex.: id_municipio)
@@ -266,6 +271,7 @@ Padronizar strings (acentos, caixa, espaços)
 
 Validar com anti_join() para ver o que não casa
 
+```
 🔒 Reprodutibilidade e transparência
 Este repositório foi organizado para:
 
