@@ -212,6 +212,100 @@ Semana de pico (exemplo):
 r
 pico <- df_se %>% arrange(desc(casos)) %>% slice(1)
 ```
+
+6) Diagrama de controle
+
+Definição:
+O diagrama de controle é utilizado para identificar desvios no padrão esperado de incidência, com base em séries históricas anteriores. Ele permite classificar a situação epidemiológica em zonas (controle, segurança, alerta e epidêmica).
+
+Base histórica:
+
+Considera-se um período de anos anteriores ao ano de referência (ano_ref).
+
+Excluem-se anos epidêmicos definidos em ano_epidemico.
+
+Calcula-se a incidência por semana epidemiológica (SE).
+
+Cálculo da incidência histórica:
+```bash
+inc = (casos / população) * 100000
+```
+
+Cálculo dos limiares por SE e município:
+```bash
+Média histórica:
+
+media = mean(inc)
+```
+
+Desvio padrão:
+```bash
+sd = sd(inc)
+```
+
+Limites:
+```bash
+limite_inferior = media - 2 * sd
+limite_alerta   = media + 2 * sd
+limite_epidemico = media + 3 * sd
+```
+
+Classificação das zonas:
+
+Zona	Intervalo
+Zona de controle	0 até média
+Zona de segurança	média até média - 2DP
+Zona de alerta	média + 2DP
+Zona epidêmica	acima de média + 3DP
+
+Interpretação:
+
+- Valores acima do limite epidêmico sugerem possível surto.
+
+- A visualização é realizada por município, podendo ser facetada quando há múltiplos territórios selecionados.
+
+- Pode-se aplicar média móvel (ex.: janela de 4 semanas) para suavização e nowcasting.
+
+
+7) Taxa de transmissibilidade viral (R0)
+
+Definição:
+A taxa de transmissibilidade viral estima a velocidade de propagação da infecção ao longo do tempo. Pode ser representada por indicadores derivados da variação semanal de casos.
+
+No contexto do boletim, a transmissibilidade pode ser aproximada por:
+
+1) Crescimento percentual semanal
+```bash
+Tx_crescimento = ((casos_t - casos_t-1) / casos_t-1) * 100
+```
+
+Interpretação:
+
+Valor positivo indica expansão da transmissão.
+
+Valor negativo indica redução da circulação viral.
+
+2) Razão de crescimento (proxy simplificada do Rt)
+```bash
+Rt_aproximado = casos_t / casos_t-1
+```
+
+Interpretação:
+
+Valor	Situação
+```bash
+Rt > 1	Expansão da transmissão
+Rt = 1	Estabilidade
+Rt < 1	Redução da transmissão
+```
+Observações metodológicas
+
+Para reduzir instabilidade, recomenda-se utilizar média móvel (ex.: 4 semanas).
+
+Valores devem ser interpretados com cautela em municípios de pequeno porte devido à maior variabilidade.
+
+A análise é complementar ao diagrama de controle e à incidência.
+
 ## 📊 Gráficos (interpretação)
 
 Casos + incidência (eixo duplo)
@@ -289,4 +383,21 @@ facilitar execução em diferentes computadores (via .bat)
 Nome: José Lucas
 E-mail: santos.joselucas.37@gmail.com
 LinkedIn: www.linkedin.com/in/jose-lucas-santos
+
+## 📰 Referências
+
+1. BRASIL. Ministério da Saúde. Guia de Vigilância Epidemiológica. 10. ed. Brasília: Ministério da Saúde, 2023.
+2. SILVA, T. F.; MORAIS, G. M.; ALMEIDA, R. B. Características clínicas de SRAG em crianças hospitalizadas: análise de um ano epidemiológico. Jornal de Pediatria, Porto Alegre, v. 100, n. 2, p. 101-109, 2024.
+3. CORI, A., Ferguson, N. M., Fraser, C., & Cauchemez, S. (2013). A New Framework and Software to Estimate Time-Varying Reproduction Numbers During Epidemics. American Journal of Epidemiology.
+4. FERREIRA, M. R.; COSTA, D. L.; PEREIRA, A. C. Estimativas do número reprodutivo efetivo (Rt) na vigilância viral respiratória. Revista Brasileira de Epidemiologia, São Paulo, v. 26, e230001, 2023.
+5. CDC – CENTERS FOR DISEASE CONTROL AND PREVENTION. Principles of Epidemiology in Public Health Practice. 3. ed. Atlanta: CDC, 2012. Disponível em: https://www.cdc.gov/csels/dsepd/ss1978/index.html.
+6. MEDRONHO, Roberto de Andrade et al. Epidemiologia. 2. ed. São Paulo: Atheneu, 2009.
+7. UNIVERSIDADE FEDERAL DE SANTA CATARINA. Construção de diagramas de controle na vigilância em saúde. Florianópolis: UFSC, 2024. (Cursos Integrados em Vigilância em Saúde).
+8. SOUSA, M. L. et al. Vigilância da Síndrome Respiratória Aguda Grave: análise dos dados de notificação no Brasil. Epidemiologia e Serviços de Saúde, Brasília, v. 34, n. 1, e20242345, 2025.
+9. SANTOS, J.; LIMA, P. C. Perfil da SRAG no pós-pandemia: desafios para a vigilância. Cadernos de Saúde Pública, Rio de Janeiro, v. 40, n. 1, p. 25-35, 2024.
+10. VIANA, V.A.F. SOBRINHO, S.A.C. JÚNIOR, F.S.FILHO, J.Q.S.CAVALCANTE, K.F. SILVA, D.B. MELLO, L.M.S. MELO, M.E.L. MACÊDO, S.M.S. LIMA, S.T.S. DUARTE, L.M.F. ARAÚJO, F.M.C. LIMA, A.Â.M.  CLINICAL, EPIDEMIOLOGICAL AND VACCINATION CHARACTERISTICSIN CHILDREN AND ADOLESCENTS OF SEVERE ACUTE RESPIRATORYSYNDROME DUE TO COVID-19 IN BRAZIL (2020 TO 2024). medRxiv preprint doi: https://doi.org/10.1101/2025.09.18.25336058; this version posted September 19, 2025.
+11. RUIVO, A.P., BAUERMANN, M.C., GREGIANINI, T.S., SANTOS, F.M., GODINHO, F., BAETHGEN, L.F., MACHADO, T.R.M., MARTINS, L.G., MONDINI, R.P., PORT, C.N., CORREA, A., SELAYARAN, T., RESENDE, P.C., WALLAU, G.L., SALVATO, R.S., e VEIGA, A.B.G. Surveillance of respiratory viruses in severe acute respiratory infections in Southern Brazil, 2023–2024.
+
+
+
 
