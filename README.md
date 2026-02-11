@@ -85,13 +85,24 @@ Na pasta do projeto:
 Rscript render_boletim.R
 ⚙️ Parâmetros (params.yaml)
 Exemplo (salvar em UTF-8, com linha em branco no final):
+```
 
+```bash
 yaml
-Copiar código
+
+filtro_ano:
+  - 2020
+  - 2025
 ano_ref: 2025
-municipio: "Brasília"
+municipio:            
+  - "planaltina"
+  - "sobradinho"
+
+usar_filtro_municipio: true
+```
 Observações importantes
 O params.yaml deve estar em UTF-8 (evita erro de “invalid multibyte” / “entrada inválida”).
+Se quiser só 1 município basta por só 1 na lista, se quiser todos, ponha []
 
 O nome do município deve seguir o mesmo padrão esperado pelo seu script (ver seção “Padronização”).
 
@@ -124,30 +135,32 @@ casos(SE) = n() após filtros.
 
 Exemplo (lógica):
 
+```bash
 r
-Copiar código
+
 df %>%
   filter(ano == ano_ref, municipio == municipio_ref) %>%
   group_by(SE) %>%
   summarise(casos = n(), .groups = "drop")
+```
 2) Incidência por 100.000 habitantes
 Definição: taxa de SRAG por 100 mil habitantes.
 
 Fórmula:
-
+```bash
 inc(SE) = (casos(SE) / população_município_ano) * 100000
-
+```
 Importante (território):
 
-Para cálculo municipal, o ideal é usar código IBGE como chave (mais robusto do que nome).
 
 No DF, atenção: RAs não são municípios IBGE. Se você filtra por RA, precisa de população por RA (ou converter a análise para município IBGE “Brasília”).
 
 Exemplo (resumo):
-
+```bash
 r
-Copiar código
+
 inc = 100000 * casos / populacao
+```
 3) Óbitos por SRAG por SE
 Definição: soma dos óbitos SRAG por SE.
 
@@ -159,23 +172,25 @@ Se óbito é inferido por status: filtrar e contar
 
 Exemplo:
 
+
+```bash
 r
-Copiar código
 df %>%
   group_by(SE) %>%
   summarise(obitos = sum(obitos, na.rm = TRUE), .groups = "drop")
+```
 4) Letalidade (%)
 Definição: proporção de óbitos entre os casos SRAG no período.
 
 Fórmula:
-
+```bash
 letalidade(%) = (óbitos / casos) * 100
-
+```
 Exemplo:
-
+```bash
 r
-Copiar código
 letalidade = ifelse(casos > 0, 100 * obitos / casos, NA_real_)
+```
 5) Indicadores agregados (resumo anual)
 No boletim, geralmente é útil apresentar também:
 
@@ -191,9 +206,10 @@ semana de pico (casos e/ou óbitos)
 
 Semana de pico (exemplo):
 
+```bash
 r
-Copiar código
 pico <- df_se %>% arrange(desc(casos)) %>% slice(1)
+```
 📊 Gráficos (interpretação)
 Casos + incidência (eixo duplo)
 Um padrão comum é:
