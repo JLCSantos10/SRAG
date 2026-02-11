@@ -106,7 +106,8 @@ Se quiser só 1 município basta por só 1 na lista, se quiser todos, ponha []
 
 O nome do município deve seguir o mesmo padrão esperado pelo seu script (ver seção “Padronização”).
 
-🧼 Padronização e filtros
+## 🧼 Padronização e filtros
+
 Padronização de município
 O projeto considera uma etapa para padronizar o texto do município (ex.: caixa alta/baixa, acentos, espaços).
 Exemplo típico de regra (pode variar no seu código):
@@ -121,7 +122,8 @@ normalizar hífens e apóstrofos
 
 Recomendação: padronize tanto SRAG.csv quanto a base de população da mesma forma para garantir join correto.
 
-🧮 Indicadores epidemiológicos (cálculos)
+## 🧮 Indicadores epidemiológicos (cálculos)
+
 A seguir está a lógica recomendada (e geralmente utilizada) para os principais indicadores do boletim.
 
 Observação: os nomes de colunas podem variar. Ajuste conforme sua base.
@@ -210,7 +212,8 @@ Semana de pico (exemplo):
 r
 pico <- df_se %>% arrange(desc(casos)) %>% slice(1)
 ```
-📊 Gráficos (interpretação)
+## 📊 Gráficos (interpretação)
+
 Casos + incidência (eixo duplo)
 Um padrão comum é:
 
@@ -235,7 +238,7 @@ r
 
 stopifnot(nrow(df_plot) > 0)
 ```
-🛠️ Solução de problemas
+## 🛠️ Solução de problemas
 
 1) invalid multibyte character
 Causa: arquivo .R, .Rmd ou .yaml salvo fora de UTF-8.
@@ -272,7 +275,7 @@ Padronizar strings (acentos, caixa, espaços)
 Validar com anti_join() para ver o que não casa
 
 ```
-🔒 Reprodutibilidade e transparência
+## 🔒 Reprodutibilidade e transparência
 Este repositório foi organizado para:
 
 garantir rastreabilidade (parâmetros via YAML)
@@ -281,7 +284,7 @@ padronizar cálculos (funções e pipelines claros)
 
 facilitar execução em diferentes computadores (via .bat)
 
-📬 Contato
+## 📬 Contato
 
 Nome: José Lucas
 E-mail: santos.joselucas.37@gmail.com
