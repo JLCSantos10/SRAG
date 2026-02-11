@@ -281,8 +281,7 @@ padronizar cálculos (funções e pipelines claros)
 
 facilitar execução em diferentes computadores (via .bat)
 
-📬 Contato (edite aqui)
-IMPORTANTE: Troque os campos abaixo pelos seus dados.
+📬 Contato
 
 Nome: José Lucas
 E-mail: santos.joselucas.37@gmail.com
