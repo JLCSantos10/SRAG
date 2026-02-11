@@ -1,96 +1,268 @@
-# 📊 Atualização do Boletim de Síndrome Respiratória Aguda Grave (SRAG)
+# Boletim SRAG (RMarkdown) — Geração automatizada (Word)
 
-Este repositório contém os scripts e procedimentos necessários para atualização automática do Boletim Epidemiológico de Síndrome Respiratória Aguda Grave (SRAG) da Região Leste do Distrito Federal.
+Este repositório contém um fluxo completo para **gerar automaticamente um boletim de SRAG** a partir de uma base `.csv`, com **filtros por ano/município**, **cálculo de indicadores epidemiológicos** e **exportação em Word** (`.docx`) via **RMarkdown**.
 
-A execução do código gera automaticamente um arquivo Word com os indicadores, gráficos e análises atualizadas.
+---
 
-# 🎯 Objetivo
+## ✅ O que este projeto faz
 
-Automatizar a construção e atualização do boletim epidemiológico de SRAG, garantindo padronização e reprodutibilidade.
+- Lê a base `Bancos/SRAG.csv`
+- Lê parâmetros em `params.yaml` (ex.: `ano_ref`, `municipio`)
+- Aplica filtros e padronizações territoriais
+- Calcula indicadores (casos, incidência, óbitos, letalidade etc.)
+- Renderiza automaticamente o arquivo **`BOLETIM_SRAG.Rmd`** em **Word**
+- Pode ser executado com **duplo clique** via `atualizar_boletim.bat`
 
-# ✅ Requisitos
+---
 
-R e RStudio instalados
+## 📁 Estrutura do repositório
 
-Download: RStudio Desktop
+> (Os nomes podem variar conforme seu projeto, mas a lógica é esta)
 
-Os arquivos de entrada devem estar na mesma pasta do projeto.
+.
+├─ Bancos/
+│ └─ SRAG.csv
+├─ BOLETIM_SRAG.Rmd
+├─ render_boletim.R
+├─ params.yaml
+├─ atualizar_boletim.bat
+└─ README.md
 
-Arquivos obrigatoriamente em csv (.csv).
+perl
+Copiar código
 
-Não alterar:
+### Descrição dos arquivos
+- **`Bancos/SRAG.csv`**: base principal do boletim (SRAG).
+- **`params.yaml`**: parâmetros para o boletim (ano e município).
+- **`BOLETIM_SRAG.Rmd`**: template do boletim (texto, tabelas e gráficos).
+- **`render_boletim.R`**: script que verifica dependências (Pandoc), lê parâmetros e renderiza o `.Rmd`.
+- **`atualizar_boletim.bat`**: executa o `render_boletim.R` encontrando o `Rscript` automaticamente.
 
-Nome dos arquivos
+---
 
-Nome das colunas nos arquivos
+## 🧩 Pré-requisitos
 
-Antes de rodar, certifique-se de que nenhum dos arquivos (boletim, planilha de monitoramento, subnotificações) esteja aberto.
+### 1) R instalado
+- Qualquer versão recente do R deve funcionar.
+- O `.bat` tenta localizar o `Rscript`:
+  - via `PATH`
+  - via `C:\Program Files\R\...`
+  - via `%LOCALAPPDATA%\Programs\R\...`
 
-# 📂 Estrutura esperada dos arquivos
+### 2) Pandoc disponível (obrigatório para Word)
+Para gerar `.docx`, o `rmarkdown` precisa do **Pandoc**.
 
-srag_min → Planilha com os casos de SRAG (nome pode variar, mas sempre começa com Casos_SRAG).
+**Opções:**
+- ✅ **RStudio instalado** (recomendado): inclui Pandoc/Quarto
+- ✅ Pandoc instalado separadamente e disponível no sistema
 
-params → Arquivo de parâmetros do boletim (ano de referência, intervalo temporal).
+> Se você usa RStudio, o caminho geralmente aparece em:
+> `Sys.getenv("RSTUDIO_PANDOC")`
 
-render_boletim.R → Script que calcula indicadores e gera o boletim.
+### 3) Pacotes R
+O `render_boletim.R` instala automaticamente (se faltar):
+- `rmarkdown`
+- `yaml`
 
-BOLETIM_SRAG.Rmd → Modelo do boletim em formato RMarkdown.
+> Seu `.Rmd` pode depender de outros pacotes (ex.: `dplyr`, `ggplot2`, `stringr`, `glue` etc.).  
+> Garanta que estes estejam listados/instalados conforme o seu boletim.
 
-atualizar_boletim.bat → Arquivo de execução rápida (roda todos os scripts automaticamente).
+---
 
-# ⚙️ Como atualizar o boletim
+## 🚀 Como executar
 
-Defina o ano de referência
+### Execução com duplo clique (Windows)
+1. Ajuste `params.yaml`
+2. Dê duplo clique em:
+   - **`atualizar_boletim.bat`**
 
-Abra o arquivo params (com Bloco de Notas).
+O Word (`.docx`) será gerado conforme definido no `BOLETIM_SRAG.Rmd`.
 
-Atualize os campos:
+### Execução via terminal
+Na pasta do projeto:
 
-filtro_ano: intervalo de anos para análise temporal (ex: 2020–2025).
+```bash
+Rscript render_boletim.R
+⚙️ Parâmetros (params.yaml)
+Exemplo (salvar em UTF-8, com linha em branco no final):
 
-ano_ref: ano de interesse atual (ex: 2025).
+yaml
+Copiar código
+ano_ref: 2025
+municipio: "Brasília"
+Observações importantes
+O params.yaml deve estar em UTF-8 (evita erro de “invalid multibyte” / “entrada inválida”).
 
-ano_epidemico: caso exista um ano epidêmico que impacte a análise.
+O nome do município deve seguir o mesmo padrão esperado pelo seu script (ver seção “Padronização”).
 
-Salve o arquivo.
+🧼 Padronização e filtros
+Padronização de município
+O projeto considera uma etapa para padronizar o texto do município (ex.: caixa alta/baixa, acentos, espaços).
+Exemplo típico de regra (pode variar no seu código):
 
-Execute a atualização
+remover espaços duplicados
 
-Dê duplo clique em atualizar_boletim.bat.
+remover acentos
 
-Uma janela preta será aberta e mostrará o progresso da execução.
+converter para maiúsculas
 
-Ao final, a mensagem exibida será:
+normalizar hífens e apóstrofos
 
-Output created: BOLETIM_SRAG.docx
-Pressione qualquer tecla para continuar...
+Recomendação: padronize tanto SRAG.csv quanto a base de população da mesma forma para garantir join correto.
 
+🧮 Indicadores epidemiológicos (cálculos)
+A seguir está a lógica recomendada (e geralmente utilizada) para os principais indicadores do boletim.
 
-Isso significa que o boletim foi atualizado com sucesso.
+Observação: os nomes de colunas podem variar. Ajuste conforme sua base.
 
-Ajuste final
+1) Casos por Semana Epidemiológica (SE)
+Definição: número de registros SRAG na SE.
 
-Abra o arquivo BOLETIM_SRAG.docx.
+Cálculo:
 
-Atualize o título com a semana epidemiológica correspondente.
+casos(SE) = n() após filtros.
 
-Atualize os campos do sumário.
+Exemplo (lógica):
 
-Copie o conteúdo para o modelo final do boletim de SRAG, se necessário.
+r
+Copiar código
+df %>%
+  filter(ano == ano_ref, municipio == municipio_ref) %>%
+  group_by(SE) %>%
+  summarise(casos = n(), .groups = "drop")
+2) Incidência por 100.000 habitantes
+Definição: taxa de SRAG por 100 mil habitantes.
 
-# 📝 Observações importantes
+Fórmula:
 
-Ao atualizar, o arquivo Word anterior será substituído.
+inc(SE) = (casos(SE) / população_município_ano) * 100000
 
-# 🔔 Se precisar manter versões anteriores, salve cópias antes de rodar novamente.
+Importante (território):
 
-O nome da planilha de casos pode variar, mas o script reconhece qualquer arquivo que comece com Casos_SRAG.
+Para cálculo municipal, o ideal é usar código IBGE como chave (mais robusto do que nome).
 
-# 📌 Histórico de Revisão
+No DF, atenção: RAs não são municípios IBGE. Se você filtra por RA, precisa de população por RA (ou converter a análise para município IBGE “Brasília”).
 
-v1.0 (06/2025) – Criação do procedimento de atualização automatizada do Boletim SRAG.
+Exemplo (resumo):
 
-# 👨‍💻 Autor
+r
+Copiar código
+inc = 100000 * casos / populacao
+3) Óbitos por SRAG por SE
+Definição: soma dos óbitos SRAG por SE.
 
-José Lucas Costa dos Santos
-Residente de Vigilância em Saúde – UnB
+Cálculo (depende da coluna):
+
+Se existe coluna obitos (0/1 ou contagem): sum(obitos)
+
+Se óbito é inferido por status: filtrar e contar
+
+Exemplo:
+
+r
+Copiar código
+df %>%
+  group_by(SE) %>%
+  summarise(obitos = sum(obitos, na.rm = TRUE), .groups = "drop")
+4) Letalidade (%)
+Definição: proporção de óbitos entre os casos SRAG no período.
+
+Fórmula:
+
+letalidade(%) = (óbitos / casos) * 100
+
+Exemplo:
+
+r
+Copiar código
+letalidade = ifelse(casos > 0, 100 * obitos / casos, NA_real_)
+5) Indicadores agregados (resumo anual)
+No boletim, geralmente é útil apresentar também:
+
+total de casos no ano
+
+total de óbitos no ano
+
+letalidade anual
+
+semanas com óbito
+
+semana de pico (casos e/ou óbitos)
+
+Semana de pico (exemplo):
+
+r
+Copiar código
+pico <- df_se %>% arrange(desc(casos)) %>% slice(1)
+📊 Gráficos (interpretação)
+Casos + incidência (eixo duplo)
+Um padrão comum é:
+
+colunas: casos por SE
+
+linha: incidência reescalada para caber no mesmo gráfico
+
+segundo eixo: incidência real
+
+Boas práticas:
+
+Sempre validar se o dataframe do gráfico tem linhas:
+
+evita max() retornar -Inf quando está vazio.
+
+Checar NA e pop == 0 antes de calcular incidência.
+
+Exemplo de proteção:
+
+r
+Copiar código
+stopifnot(nrow(df_plot) > 0)
+🛠️ Solução de problemas
+1) invalid multibyte character
+Causa: arquivo .R, .Rmd ou .yaml salvo fora de UTF-8.
+
+✅ Solução:
+
+Salvar render_boletim.R, BOLETIM_SRAG.Rmd e params.yaml em UTF-8 (sem BOM)
+
+Garantir linha final no params.yaml
+
+2) Pandoc não encontrado
+Causa: o Rscript não encontrou o Pandoc (mesmo com RStudio instalado).
+
+✅ Solução:
+
+No RStudio, rode:
+
+r
+Copiar código
+Sys.getenv("RSTUDIO_PANDOC")
+Ajuste o render_boletim.R para apontar para esse caminho quando rodar via Rscript.
+
+3) Indicadores “zerados” após left_join(pop)
+Causa comum: chave territorial inconsistente (municipio como texto vs código IBGE / RA no DF).
+
+✅ Solução:
+
+Preferir join por código (ex.: id_municipio)
+
+Padronizar strings (acentos, caixa, espaços)
+
+Validar com anti_join() para ver o que não casa
+
+🔒 Reprodutibilidade e transparência
+Este repositório foi organizado para:
+
+garantir rastreabilidade (parâmetros via YAML)
+
+padronizar cálculos (funções e pipelines claros)
+
+facilitar execução em diferentes computadores (via .bat)
+
+📬 Contato (edite aqui)
+IMPORTANTE: Troque os campos abaixo pelos seus dados.
+
+Nome: José Lucas
+E-mail: santos.joselucas.37@gmail.com
+LinkedIn: www.linkedin.com/in/jose-lucas-santos
+

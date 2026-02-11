@@ -1,5 +1,14 @@
 filtro_ano:
- - 2020
- - 2025
+  - 2020
+  - 2025
+
 ano_ref: 2025
 ano_epidemico: 2021
+
+estado: "DF" # Troque por outra UF como "PE","SP"
+
+municipio:            # Se quiser só 1 município basta por só 1 na lista, se quiser todos, ponha []
+  - "planaltina"
+  - "sobradinho" 
+
+usar_filtro_municipio: true

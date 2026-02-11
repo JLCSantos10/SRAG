@@ -1,54 +1,76 @@
 @echo off
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-REM Tenta encontrar o Rscript no sistema
+echo =============================
+echo Atualizador de Boletim
+echo =============================
+echo.
+
 set RSCRIPT_PATH=
 
-REM Verifica se existe no PATH
-where Rscript >nul 2>&1
+REM -------------------------------------------------
+REM 1) Tenta encontrar Rscript no PATH
+REM -------------------------------------------------
+echo Procurando Rscript no PATH...
+where Rscript >nul 2>nul
+
 if %errorlevel% equ 0 (
-    set RSCRIPT_PATH=Rscript
-    goto :execute
+    for /f "delims=" %%i in ('where Rscript') do (
+        set RSCRIPT_PATH=%%i
+        goto :execute
+    )
 )
 
-REM Verifica caminhos comuns de instalação do R
-if exist "C:\Program Files\R\R-4.5.1\bin\x64\Rscript.exe" (
-    set RSCRIPT_PATH="C:\Program Files\R\R-4.5.1\bin\x64\Rscript.exe"
-    goto :execute
+REM -------------------------------------------------
+REM 2) Procura em Program Files
+REM -------------------------------------------------
+echo Rscript nao encontrado no PATH.
+echo Procurando em Program Files...
+
+for /d %%D in ("C:\Program Files\R\R-*") do (
+    if exist "%%D\bin\x64\Rscript.exe" (
+        set RSCRIPT_PATH=%%D\bin\x64\Rscript.exe
+    )
 )
 
-if exist "C:\Program Files\R\R-4.4\bin\x64\Rscript.exe" (
-    set RSCRIPT_PATH="C:\Program Files\R\R-4.4\bin\x64\Rscript.exe"
-    goto :execute
+REM -------------------------------------------------
+REM 3) Procura em AppData (instalacao por usuario)
+REM -------------------------------------------------
+if not defined RSCRIPT_PATH (
+    echo Procurando em AppData...
+    for /d %%D in ("%LOCALAPPDATA%\Programs\R\R-*") do (
+        if exist "%%D\bin\Rscript.exe" (
+            set RSCRIPT_PATH=%%D\bin\Rscript.exe
+        )
+    )
 )
 
-if exist "C:\Program Files\R\R-4.3\bin\x64\Rscript.exe" (
-    set RSCRIPT_PATH="C:\Program Files\R\R-4.3\bin\x64\Rscript.exe"
-    goto :execute
+REM -------------------------------------------------
+REM 4) Se nao encontrou
+REM -------------------------------------------------
+if not defined RSCRIPT_PATH (
+    echo.
+    echo ERRO: R nao encontrado no sistema.
+    echo Verifique se o R esta instalado corretamente.
+    pause
+    exit /b 1
 )
 
-if exist "C:\Program Files\R\R-4.2\bin\x64\Rscript.exe" (
-    set RSCRIPT_PATH="C:\Program Files\R\R-4.2\bin\x64\Rscript.exe"
-    goto :execute
-)
-
-if exist "C:\Program Files\R\R-4.1\bin\x64\Rscript.exe" (
-    set RSCRIPT_PATH="C:\Program Files\R\R-4.1\bin\x64\Rscript.exe"
-    goto :execute
-)
-
-if exist "C:\Program Files\R\R-4.0\bin\x64\Rscript.exe" (
-    set RSCRIPT_PATH="C:\Program Files\R\R-4.0\bin\x64\Rscript.exe"
-    goto :execute
-)
-
-REM Se não encontrou, mostra erro
-echo ERRO: Nao foi possivel encontrar o Rscript.exe
-echo Verifique se o R esta instalado no sistema
-pause
-exit /b 1
-
+REM -------------------------------------------------
+REM EXECUCAO
+REM -------------------------------------------------
 :execute
-echo Executando com: %RSCRIPT_PATH%
-%RSCRIPT_PATH% render_boletim.R
+echo.
+echo Rscript encontrado em:
+echo %RSCRIPT_PATH%
+echo.
+echo Executando render_boletim.R...
+echo.
+
+"%RSCRIPT_PATH%" render_boletim.R
+
+echo.
+echo Processo finalizado.
 pause
+endlocal
